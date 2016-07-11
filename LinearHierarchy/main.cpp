@@ -5,7 +5,7 @@
 
 int main()
 {
-	LHR_test();
+	FLAT_test();
 
     return 0;
 }

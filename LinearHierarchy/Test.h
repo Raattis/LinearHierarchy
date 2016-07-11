@@ -3,8 +3,8 @@
 #include <stdio.h>      /* printf, fgets */
 #include <stdlib.h>     /* atoi */
 
-#define LHR_ASSERTS_ENABLED true
-#include "LinearHierarchy.h"
+#define FLAT_ASSERTS_ENABLED true
+#include "FlatHierarchy.h"
 
 struct Handle
 {
@@ -22,7 +22,7 @@ struct HandleSorter
 	inline static bool isFirst(const Handle& a, const Handle& b) { return a.number < b.number; }
 };
 
-typedef LinearHierarchy<Handle, HandleSorter> HierarchyType;
+typedef FlatHierarchy<Handle, HandleSorter> HierarchyType;
 
 Handle getHandle(const char* ptr)
 {
@@ -38,6 +38,12 @@ typedef size_t SizeType;
 
 void printAll(const HierarchyType& l)
 {
+	if (!l.getIsCacheValid())
+	{
+		printf(".");
+		return;
+	}
+
 	printf("\n");
 	for (SizeType c = 0; c < l.getCount() + 1; c++)
 	{
@@ -55,21 +61,16 @@ void printAll(const HierarchyType& l)
 
 	printf("\n");
 
-	if (!l.cacheIsValid)
-	{
-		printf("Cache is invalid, cannot print tree\n");
-		return;
-	}
 
-	char buffer[512];
-	for (SizeType r = 0; r < l.hierarchyCache.getRows(); r++)
+	char buffer[4096];
+	for (SizeType r = 0, end = l.findMaxDepth() + 1; r < end; r++)
 	{
 		buffer[l.getCount() * 4] = '\0';
 
 		// Iterate columns backwards to benefit from linear parent lookup
-		for (SizeType c = l.getCount(); c-- > 0;)
+		for (SizeType c = 0; c < l.getCount(); ++c)
 		{
-			SizeType parentDepth = l.depths[l.getParentIndex(r, c)];
+			SizeType parentDepth = c == 0 ? 0 : l.depths[l.getParentIndex(r, c)];
 			bool hasDirectChildren = false;
 
 			for (SizeType i = c + 1; i < l.getCount(); i++)
@@ -98,17 +99,19 @@ void printAll(const HierarchyType& l)
 
 #include <time.h>
 #include <windows.h>
-BOOL WINAPI QueryPerformanceCounter(
-	_Out_ LARGE_INTEGER *lpPerformanceCount
-	);
+BOOL WINAPI QueryPerformanceCounter(_Out_ LARGE_INTEGER *lpPerformanceCount);
 
-void LHR_test()
+void FLAT_test()
 {
-	HierarchyType l(10);
+	HierarchyType l(15, 70);
 	l.createRootNode(getHandle("Root"));
 	l.createRootNode(getHandle("R22t"));
 	uint32_t random = 7151 * time(NULL);
-	random = 7711553;
+	//random = 17711551;
+	printf("Random seed: %u\n", random);
+
+	l.makeCacheValid();
+	l.keepCacheValid = false;
 
 	struct Random
 	{
@@ -118,51 +121,17 @@ void LHR_test()
 		}
 	};
 
-	for (SizeType i = 0; i < 65; ++i)
-	{
-		char name[5] = "(  )";
-		name[1] = 'A' + (i % 80);
-		SizeType parent = Random::get(random) % l.getCount();
-		SizeType result = l.createNodeAsChildOf(parent, getHandle(name));
-
-		printf("\ncreateNodeAsChildOf(%d, %s) -> %d", parent, name, result);
-		//l.makeCacheValid();
-		printAll(l);
-	}
-
-	l.makeCacheValid();
-	l.keepCacheValid = false;
-
-	for (SizeType i = 0; i < 13; ++i)
-	{
-		SizeType parent = Random::get(random) % l.getCount();
-		SizeType child = Random::get(random) % l.getCount();
-		if (l.isChildOf(parent, child, false))
-		{
-			SizeType temp = parent;
-			parent = child;
-			child = temp;
-		}
-		SizeType result = l.makeChildOf(child, parent);
-		printf("\nl.makeChildOf(%d, %d) -> %d", child, parent, result);
-		printAll(l);
-	}
-
-	l.makeCacheValid();
-	printAll(l);
-
-	random = 7711551;
-
-	LARGE_INTEGER li;
-	QueryPerformanceCounter(&li);
 	SizeType eraseCount = 0;
 	SizeType addCount = 0;
 	SizeType rootCount = 0;
 	SizeType moveCount = 0;
 
-	for (SizeType j = 0; j < 20; j++)
+	LARGE_INTEGER li;
+	QueryPerformanceCounter(&li);
+
+	for (SizeType j = 0; j < 100; j++)
 	{
-		SizeType triesLeft = 20;
+		SizeType triesLeft = 30;
 		while (--triesLeft > 2)
 		{
 			SizeType child = Random::get(random) % l.getCount();
@@ -172,7 +141,7 @@ void LHR_test()
 			++eraseCount;
 		}
 
-		triesLeft = 50;
+		triesLeft = 1000;
 		while(--triesLeft > 2)
 		{
 			char name[4] = { 'A' + Random::get(random) % 28, 'a' + Random::get(random) % 28, 'a' + Random::get(random) % 28, 'a' + Random::get(random) % 28 };
@@ -184,10 +153,12 @@ void LHR_test()
 				l.createRootNode(getHandle(name));
 				++rootCount;
 			}
-			else if (h.text[0] >= 'W')
+			else if (h.text[0] >= 'P')
 			{
 				SizeType parent = h.number % l.getCount();
-				if (parent < child)
+				if (parent == child)
+					continue;
+				else if (parent < child)
 				{
 					l.makeChildOf(child, parent);
 				}
@@ -211,15 +182,28 @@ void LHR_test()
 	LARGE_INTEGER freq;
 	QueryPerformanceFrequency(&freq);
 
-	double PCFreq = double(freq.QuadPart) / 1000.0;
+	double PCFreq = double(freq.QuadPart) / 1.0;
 	double diff = double(li2.QuadPart - li.QuadPart) / PCFreq;
 
-	l.makeCacheValid();
-	printAll(l);
+	//printAll(l);
 
-	printf("%lf s, adds: %d, erases: %d, moves: %d, rootAdds: %d\n", diff, addCount, eraseCount, moveCount, rootCount);
-
+	printf("%.4f s, adds: %d, erases: %d, moves: %d, rootAdds: %d\n", diff, addCount, eraseCount, moveCount, rootCount);
+	printf("Count: %u, cacheRows: %u, cacheColumns: %u, bufferCount: %u \n", l.getCount(), l.hierarchyCache.cacheRows.getSize(), l.hierarchyCache.DEBUG_getColumnCapacity(), l.hierarchyCache.buffers.getSize());
+	for (size_t i = 0; i < l.hierarchyCache.buffers.getSize(); i++)
+	{
+		printf("buffers[%u].capacity = %u\n", i, l.hierarchyCache.buffers[i].capacity);
+	}
+	
 	system("pause");
+
+
+
+
+
+
+
+
+
 	while (false)
 	{
 		printAll(l);
@@ -288,9 +272,9 @@ void LHR_test()
 				printf("%d, ", l.depths[col]);
 			}
 			printf("\n\n");
-			for (SizeType rowNumber = 0; rowNumber + 1 < l.hierarchyCache.getRows(); rowNumber++)
+			for (SizeType rowNumber = 0, end = l.findMaxDepth(); rowNumber + 1 < end; rowNumber++)
 			{
-				HierarchyType::HierarchyCacheRow& row = l.hierarchyCache.row(rowNumber);
+				HierarchyCacheRow& row = l.hierarchyCache.row(rowNumber);
 				for (SizeType col = 0; col < l.getCount(); col++)
 				{
 					printf("%d, ", row.column(col));

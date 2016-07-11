@@ -142,7 +142,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="LinearHierarchy.h" />
+    <ClInclude Include="FlatHierarchy.h" />
     <ClInclude Include="Test.h" />
   </ItemGroup>
   <ItemGroup>
