@@ -47,6 +47,20 @@ static_assert((FLAT_DEPTHTYPE)(0) < (FLAT_DEPTHTYPE)(-1), "FLAT_DEPTHTYPE must b
 	#endif
 #endif
 
+#ifndef FLAT_DEBUGGING_ENABLED
+	#ifdef _DEBUG
+		#define FLAT_DEBUGGING_ENABLED true
+	#else
+		#define FLAT_DEBUGGING_ENABLED false
+	#endif
+#endif
+
+#if FLAT_DEBUGGING_ENABLED == true
+	#define FLAT_DEBUG_ASSERT(...) FLAT_ASSERT(__VA_ARGS__)
+#else
+	#define FLAT_DEBUG_ASSERT(...) do{}while(false)
+#endif
+
 #ifndef FLAT_ERROR
 	#define FLAT_ERROR(string) FLAT_ASSERT(!(string))
 #endif
@@ -64,6 +78,19 @@ static_assert((FLAT_DEPTHTYPE)(0) < (FLAT_DEPTHTYPE)(-1), "FLAT_DEPTHTYPE must b
 	#define FLAT_MEMMOVE memcpy
 #endif
 
+
+static uint32_t getNextPowerOfTwo(uint32_t v)
+{
+	FLAT_ASSERT((v & 0x80000000) == 0);
+
+	uint32_t r = 0;
+	while (v >>= 1)
+	{
+		++r;
+	}
+	return 1 << (r + 1);
+}
+
 struct DefaultSorter
 {
 	static const bool UseSorting = true;
@@ -72,389 +99,14 @@ struct DefaultSorter
 	inline static bool isFirst(const T& a, const T& b) { return a < b; }
 };
 
-struct HierarchyCacheRow
-{
-	typedef FLAT_SIZETYPE SizeType;
-	typedef SizeType RelativeParentIndex;
-	typedef SizeType ColumnIndex;
-
-	RelativeParentIndex* cacheValues;
-
-#if FLAT_ASSERTS_ENABLED
-private:
-	SizeType DEBUG_columnCount;
-public:
-	HierarchyCacheRow(RelativeParentIndex* cacheValues, SizeType columnCount)
-		: cacheValues(cacheValues)
-		, DEBUG_columnCount(columnCount)
-	{
-	}
-	HierarchyCacheRow(const HierarchyCacheRow& other)
-		: cacheValues(other.cacheValues)
-		, DEBUG_columnCount(other.DEBUG_columnCount)
-	{
-	}
-#else
-	HierarchyCacheRow(RelativeParentIndex* cacheValues, SizeType columnCount)
-		: cacheValues(cacheValues)
-	{
-	}
-	HierarchyCacheRow(const HierarchyCacheRow& other)
-		: cacheValues(other.cacheValues)
-	{
-	}
-#endif
-
-	inline RelativeParentIndex column(ColumnIndex index) const
-	{
-		FLAT_ASSERT(index < DEBUG_columnCount);
-		return cacheValues[index];
-	}
-	inline RelativeParentIndex& column(ColumnIndex index)
-	{
-		FLAT_ASSERT(index < DEBUG_columnCount);
-		return cacheValues[index];
-	}
-};
-
-struct HierarchyCache
-{
-	typedef FLAT_SIZETYPE SizeType;
-	typedef SizeType RelativeParentIndex;
-	typedef FLAT_DEPTHTYPE RowIndex;
-	typedef SizeType ColumnIndex;
-private:
-	struct Buffer
-	{
-		Buffer()
-			: capacity(0)
-			, buffer(NULL)
-		{
-			FLAT_ASSERT(!"What are you doing here?");
-		}
-
-		Buffer(SizeType capacity)
-			: capacity(capacity)
-			, buffer((RelativeParentIndex*)malloc(sizeof(RelativeParentIndex) * capacity))
-		{
-			FLAT_ASSERT(capacity > 0);
-			FLAT_ASSERT(buffer);
-		}
-		void erase()
-		{
-			FLAT_ASSERT(buffer != NULL);
-			free(buffer);
-			buffer = NULL;
-			capacity = 0;
-		}
-
-		RelativeParentIndex* buffer;
-		SizeType capacity;
-	};
-
-public:
-	HierarchyCache()
-		: cacheIsValid(false)
-		, rowCapacity(0)
-		, columnCapacity(0)
-	{
-	}
-	HierarchyCache(RowIndex reserveRows, ColumnIndex reserveColumns)
-		: cacheIsValid(false)
-		, rowCapacity(0)
-		, columnCapacity(0)
-	{
-		reserve(reserveRows, reserveColumns);
-		cacheIsValid = false;
-	}
-	~HierarchyCache()
-	{
-		for (SizeType i = 0; i < buffers.getSize(); i++)
-		{
-			buffers[i].erase();
-		}
-	}
-
-	FLAT_VECTOR<Buffer> buffers;
-	FLAT_VECTOR<HierarchyCacheRow> cacheRows;
-	bool cacheIsValid;
-private:
-	RowIndex rowCapacity;
-	SizeType columnCapacity;
-public:
-	SizeType DEBUG_getColumnCapacity() const
-	{
-		return columnCapacity;
-	}
-	static uint32_t getNextPowerOfTwo(uint32_t v)
-	{
-		FLAT_ASSERT((v & 0x80000000) == 0);
-
-		uint32_t r = 0;
-		while (v >>= 1)
-		{
-			++r;
-		}
-		return 1 << (r + 1);
-	}
-
-	void reserve(RowIndex reserveRows, SizeType reserveColumns)
-	{
-		if (reserveRows <= rowCapacity && reserveColumns <= columnCapacity)
-			return;
-		
-		reserveColumns = getNextPowerOfTwo(reserveColumns - 1);
-		
-		if (reserveRows > rowCapacity && reserveColumns <= columnCapacity)
-		{
-			// Only adding new rows
-
-			// Store the row count that was requested, not the actual number of cacheRows (allows shuffling memory later if columns are added)
-			rowCapacity = reserveRows;
-
-			if (reserveRows > cacheRows.getSize())
-			{
-				SizeType oldRowCount = cacheRows.getSize();
-				RowIndex targetRowCount = reserveRows + 1024 / reserveColumns;
-				cacheRows.reserve(targetRowCount);
-				buffers.pushBack(Buffer((reserveColumns)* (targetRowCount - cacheRows.getSize())));
-
-				Buffer& b = buffers.getBack();
-				for (SizeType i = 0, end = targetRowCount - cacheRows.getSize(); i < end; i++)
-				{
-					cacheRows.pushBack(HierarchyCacheRow(b.buffer + i * reserveColumns, reserveColumns));
-				}
-				FLAT_ASSERT(reserveRows == cacheRows.getSize());
-
-				if (cacheIsValid)
-				{
-					// Keep cache valid
-
-					for (RowIndex row = oldRowCount; row < cacheRows.getSize(); row++)
-					{
-						FLAT_MEMSET(cacheRows[row].cacheValues, 0, sizeof(HierarchyCacheRow::RelativeParentIndex) * columnCapacity);
-					}
-				}
-			}
-			return;
-		}
-
-		// Adding columns and possibly also rows
-		
-		cacheIsValid = false; // Shuffling row buffers will always invalidate cache
-		columnCapacity = reserveColumns;
-
-		// Free buffers that have become smaller than columnCapacity
-		{
-			for (SizeType i = 0; i < buffers.getSize(); )
-			{
-				if (buffers[i].capacity < columnCapacity)
-				{
-					buffers[i].erase();
-					buffers[i] = buffers.getBack();
-					buffers.resize(buffers.getSize() - 1);
-					continue;
-				}
-				++i;
-			}
-		}
-		
-		RowIndex targetRowCount = rowCapacity;
-		if (reserveRows > rowCapacity)
-		{
-			rowCapacity = reserveRows;
-			targetRowCount = reserveRows + 1024 / columnCapacity;
-		}
-
-		cacheRows.clear();
-		cacheRows.reserve(targetRowCount);
-		
-		// Recycle buffers
-		SizeType bufferIndex = 0;
-		while(cacheRows.getSize() < targetRowCount)
-		{
-			if (bufferIndex >= buffers.getSize())
-			{
-				// Create new buffer
-
-				SizeType bufferRowCount = getNextPowerOfTwo(targetRowCount - cacheRows.getSize() - 1);
-				FLAT_ASSERT(bufferRowCount >= targetRowCount - cacheRows.getSize());
-				buffers.pushBack(Buffer(columnCapacity * bufferRowCount));
-			}
-
-			// Distribute buffers to cacheRows
-			Buffer& b = buffers[bufferIndex];
-			++bufferIndex;
-
-			FLAT_ASSERT(b.capacity >= columnCapacity);
-			for (SizeType i = 0, end = b.capacity / columnCapacity; i < end; ++i)
-			{
-				cacheRows.pushBack(HierarchyCacheRow(b.buffer + (columnCapacity * i), columnCapacity));
-			}
-
-		}
-
-		FLAT_ASSERT(reserveRows <= cacheRows.getSize());
-	}
-
-	HierarchyCacheRow& row(RowIndex depth)
-	{
-		FLAT_ASSERT(depth < cacheRows.getSize());
-		return cacheRows[depth];
-	}
-	const HierarchyCacheRow& row(RowIndex depth) const
-	{
-		FLAT_ASSERT(depth < cacheRows.getSize());
-		return cacheRows[depth];
-	}
-
-	void clearValuesOutSide(RowIndex rowIndex, ColumnIndex columnIndex)
-	{
-		FLAT_ASSERT(columnIndex <= columnCapacity);
-		FLAT_ASSERT(rowIndex < cacheRows.getSize());
-
-		for (RowIndex row = 0; row < rowIndex; row++)
-		{
-			FLAT_MEMSET(cacheRows[row].cacheValues + columnIndex, 0, sizeof(HierarchyCacheRow::RelativeParentIndex) * (columnCapacity - columnIndex));
-		}
-
-		for (RowIndex row = rowIndex; row < cacheRows.getSize(); row++)
-		{
-			FLAT_MEMSET(cacheRows[row].cacheValues, 0, sizeof(HierarchyCacheRow::RelativeParentIndex) * columnCapacity);
-		}
-	}
-};
-
-template<typename ValueType, typename Sorter = DefaultSorter>
-class FlatHierarchy
+class FlatHierarchyBase
 {
 public:
 	typedef FLAT_SIZETYPE SizeType;
 	typedef FLAT_DEPTHTYPE DepthValue;
 	typedef SizeType HierarchyIndex;
-	typedef SizeType RelativeParentIndex;
-	typedef SizeType RelativeChildIndex;
-	typedef SizeType RelativeSiblingIndex;
 
-	FLAT_VECTOR<ValueType> values;
 	FLAT_VECTOR<DepthValue> depths;
-
-	FLAT_VECTOR<RelativeChildIndex> lastDescendantCache;
-	FLAT_VECTOR<RelativeChildIndex> nextSiblingCache;
-
-	HierarchyCache hierarchyCache;
-	bool keepCacheValid;
-	bool getIsCacheValid() const { return hierarchyCache.cacheIsValid; }
-
-	FlatHierarchy()
-		: keepCacheValid(false)
-		, hierarchyCache()
-	{
-	}
-	FlatHierarchy(SizeType reserveDepth, SizeType reserveSize)
-		: keepCacheValid(false)
-		, hierarchyCache(reserveDepth, reserveSize)
-	{
-		values.reserve(reserveSize);
-		depths.reserve(reserveSize);
-		hierarchyCache.reserve(reserveDepth, reserveSize);
-	}
-	~FlatHierarchy()
-	{
-	}
-
-	RelativeParentIndex getCacheValue(DepthValue row, HierarchyIndex column) const
-	{
-		FLAT_ASSERT(getIsCacheValid());
-		return hierarchyCache.row(row).column(column);
-	}
-	HierarchyIndex getParentIndex(DepthValue depth, HierarchyIndex child) const
-	{
-		FLAT_ASSERT(getIsCacheValid());
-		FLAT_ASSERT(child >= hierarchyCache.row(depth).column(child));
-		return child - hierarchyCache.row(depth).column(child);
-	}
-	HierarchyIndex getParentIndexRegardlessOfCache(DepthValue depth, HierarchyIndex child) const
-	{
-		if (getIsCacheValid())
-		{
-			return getParentIndex(depth, child);
-		}
-		
-		for (HierarchyIndex i = child + 1; i-- > 0; )
-		{
-			if (depths[i] == depth)
-				return i;
-		}
-		FLAT_ASSERT(!"Everybody must have a parent... What is this sorcery?")
-		return 0;
-	}
-	void makeCacheValid(DepthValue maxDepth = 0)
-	{
-		if (maxDepth == 0)
-			maxDepth = findMaxDepth();
-
-		printf("makeCacheValid(%d)\n", maxDepth);
-
-		FLAT_ASSERT(maxDepth == findMaxDepth());
-
-		hierarchyCache.reserve(maxDepth, getCount());
-		hierarchyCache.cacheIsValid = true;
-
-		hierarchyCache.clearValuesOutSide(maxDepth, getCount());
-
-		for (DepthValue rowNumber = 0; rowNumber < maxDepth; rowNumber++)
-		{
-			HierarchyCacheRow& row = hierarchyCache.row(rowNumber);
-
-			row.column(0) = 0;
-			for (HierarchyIndex i = 1; i < getCount(); i++)
-			{
-				if (depths[i] > rowNumber)
-				{
-					row.column(i) = row.column(i - 1) + 1;
-				}
-				else
-				{
-					row.column(i) = 0;
-				}
-			}
-		}
-	}
-
-	void partialCacheUpdate(HierarchyIndex startColumn, HierarchyIndex endColumn)
-	{
-		if (!getIsCacheValid())
-			return;
-
-		FLAT_ASSERT(endColumn <= getCount());
-
-		//printf("partialCacheUpdate: start: %d, count: %d\n", startColumn, endColumn - startColumn);
-
-		for (DepthValue rowNumber = 0, end = findMaxDepth(); rowNumber < end; rowNumber++)
-		{
-			HierarchyCacheRow& row = hierarchyCache.row(rowNumber);
-
-			HierarchyIndex i = startColumn;
-			if (i == 0)
-			{
-				row.column(0) = 0;
-				++i;
-			}
-
-			for (; i < endColumn; i++)
-			{
-				if (depths[i] > rowNumber)
-				{
-					row.column(i) = row.column(i - 1) + 1;
-				}
-				else
-				{
-					row.column(i) = 0;
-				}
-			}
-		}
-	}
 
 	SizeType getCount() const
 	{
@@ -471,6 +123,25 @@ public:
 		return result;
 	}
 
+	static HierarchyIndex getIndexNotFound() { return HierarchyIndex(~0); }
+};
+
+template<typename ValueType, typename Sorter = DefaultSorter>
+class FlatHierarchy : public FlatHierarchyBase
+{
+public:
+
+	FLAT_VECTOR<ValueType> values;
+
+	FlatHierarchy(SizeType reserveSize)
+	{
+		values.reserve(reserveSize);
+		depths.reserve(reserveSize);
+	}
+	~FlatHierarchy()
+	{
+	}
+	
 	HierarchyIndex createRootNode(const ValueType& value)
 	{
 		HierarchyIndex newIndex = getCount();
@@ -495,14 +166,6 @@ public:
 		{
 			values.pushBack(value);
 			depths.pushBack((DepthValue)0U);
-		}
-
-		if(!keepCacheValid || !getIsCacheValid())
-			hierarchyCache.cacheIsValid = false;
-		else
-		{
-			hierarchyCache.reserve(1, getCount());
-			partialCacheUpdate(newIndex, getCount());
 		}
 		return newIndex;
 	}
@@ -534,14 +197,6 @@ public:
 
 		values.insert(newIndex, value);
 		depths.insert(newIndex, newParentCount);
-
-		if (!keepCacheValid || !getIsCacheValid())
-			hierarchyCache.cacheIsValid = false;
-		else
-		{
-			hierarchyCache.reserve(newParentCount, getCount());
-			partialCacheUpdate(newIndex, getCount());
-		}
 		return newIndex;
 	}
 	HierarchyIndex getLastDescendant(HierarchyIndex parentIndex)
@@ -559,23 +214,10 @@ public:
 	{
 		//printf("Make %d child of %d\n", child, parent);
 		
-		if (child == parent)
-		{
-			FLAT_ERROR("Cannot be own parent.");
-			return child;
-		}
-
-		if (isChildOf(child, parent, false) && depths[child] <= depths[parent] + 1)
-		{
-			// Already direct child of parent (or same)
-			return child;
-		}
-		if (isChildOf(parent, child, false))
-		{
-			FLAT_ERROR("That's incest, yo!");
-			return child;
-		}
-
+		FLAT_ASSERT(child != parent && "Self-adoption");
+		FLAT_ASSERT(!linearIsChildOf(parent, child) && "Incest");
+		FLAT_ASSERT((depths[child] > depths[parent] + 1 || !linearIsChildOf(child, parent)) && "Re-parenting");
+		
 		SizeType dest = parent + 1; // Default destination position is right after parent
 		SizeType count = getLastDescendant(child) - child + 1; // Descendant count including the child
 		FLAT_ASSERT(count > 0);
@@ -601,12 +243,14 @@ public:
 			if (child > parent)
 			{
 				// If child's index is greater than parent, find a place in parents children that is closest to child's current position
-				HierarchyCacheRow& mapRow = hierarchyCache.row(depths[parent]);
 				DepthValue targetDepth = depths[parent] + 1;
-				while (mapRow.column(dest) == dest - parent && (dest > child + count || depths[dest] != targetDepth))
+				for (HierarchyIndex i = parent + 1; i < child; ++i)
 				{
-					++dest;
-					FLAT_ASSERT(dest <= getCount());
+					if (depths[i] > targetDepth)
+						continue;
+					if (depths[i] < targetDepth)
+						break;
+					dest = i;
 				}
 			}
 		}
@@ -632,21 +276,8 @@ public:
 		for (SizeType i = 0; i < count; i++)
 		{
 			depths[dest + i] += depthDiff;
-			FLAT_ASSERT(depths[dest + i] < FLAT_MAXDEPTH); // Over flow protection
+			FLAT_ASSERT(depths[dest + i] < FLAT_MAXDEPTH && "Over/Under-flow threat detected"); // Over flow protection
 		}
-
-		if (!keepCacheValid || !getIsCacheValid())
-		{
-			hierarchyCache.cacheIsValid = false;
-		}
-		else
-		{
-			hierarchyCache.reserve(findMaxDepth(), getCount());
-			SizeType start = source < dest ? source : dest;
-			SizeType end = getCount(); // TODO: Get old root parent's lastDescendant if it is larger that source+count OR dest+count
-			partialCacheUpdate(start, end);
-		}
-
 		return dest;
 	}
 
@@ -660,11 +291,6 @@ public:
 
 		depths.resize(depths.getSize() - count);
 		values.resize(values.getSize() - count);
-
-		if (!keepCacheValid || !getIsCacheValid())
-			hierarchyCache.cacheIsValid = false;
-		else
-			partialCacheUpdate(child, getCount());
 	}
 
 	void move(SizeType source, SizeType dest, SizeType count)
@@ -718,57 +344,440 @@ public:
 		FLAT_MEMCPY(vPtr + dest, valueBuffer, count * sizeof(ValueType));
 	}
 
-	inline bool isChildOf(HierarchyIndex child, HierarchyIndex parent) const
+	inline bool linearIsChildOf(HierarchyIndex child, HierarchyIndex parent)
 	{
-		FLAT_ASSERT(getIsCacheValid());
-		FLAT_ASSERT(parent <= child || (child - parent) != getCacheValue(depths[parent], child));
-		return (child - parent) == getCacheValue(depths[parent], child);
-	}
-	inline bool isChildOf(HierarchyIndex child, HierarchyIndex parent, bool updateCacheIfNecessary)
-	{
-		if (getIsCacheValid())
-			return isChildOf(child, parent);
-
-		if (parent > child || depths[parent] > depths[child])
-			return false;
-
-		if (!updateCacheIfNecessary)
-		{
-			if (child == parent)
-				return true;
-
-			DepthValue parentDepth = depths[parent];
-			for (HierarchyIndex c = child; c-- > parent; )
-			{
-				if (depths[c] <= parentDepth && c > parent)
-					return false;
-			}
-			return true;
-		}
-		else
-		{
-			makeCacheValid();
-			return isChildOf(child, parent);
-		}
-	}
-	inline bool isChildOf(HierarchyIndex child, HierarchyIndex parent, bool updateCacheIfNecessary) const
-	{
-		FLAT_ASSERT((!updateCacheIfNecessary) && "Calling const version of isChildOf with updateCacheIfNecessary as true");
-
-		if (getIsCacheValid())
-			return isChildOf(child, parent);
-
-		if (parent > child && depths[parent] > depths[child])
+		if (child <= parent || depths[child] <= depths[parent])
 			return false;
 
 		DepthValue parentDepth = depths[parent];
-		for (HierarchyIndex c = child; c-- > parent; )
+		for (HierarchyIndex c = parent; c < child; ++c)
 		{
-			if (depths[c] <= parentDepth && c > parent)
+			if (depths[c] <= parentDepth)
 				return false;
 		}
 		return true;
 	}
+
+	HierarchyIndex findValue(const ValueType& valueType, HierarchyIndex startingFrom = 0)
+	{
+		// Linear search
+		for (HierarchyIndex i = startingFrom, end = getCount(); i < end; ++i)
+		{
+			if (values[i] == valueType)
+				return i;
+		}
+		return getIndexNotFound();
+	}
+	HierarchyIndex findValueAsChildOf(const ValueType& valueType, HierarchyIndex parent)
+	{
+		// Linear search below parents depth starting from parent index
+		DepthValue parentDepth = depths[parent];
+		for (HierarchyIndex i = parent + 1, end = getCount(); i < end && parentDepth < depths[i]; ++i)
+		{
+			if (values[i] == valueType)
+				return i;
+		}
+		return getIndexNotFound();
+	}
 };
+
+
+
+
+
+
+
+
+
+
+
+struct HierarchyCache
+{
+	typedef FLAT_SIZETYPE SizeType;
+	typedef SizeType RelativeParentIndex;
+	typedef FLAT_DEPTHTYPE RowIndex;
+	typedef SizeType ColumnIndex;
+
+	struct Row
+	{
+		typedef FLAT_SIZETYPE SizeType;
+		typedef SizeType RelativeParentIndex;
+		typedef SizeType ColumnIndex;
+
+		RelativeParentIndex* cacheValues;
+
+#if FLAT_DEBUGGING_ENABLED == true
+	private:
+		SizeType DEBUG_columnCount;
+	public:
+		Row(RelativeParentIndex* cacheValues, SizeType columnCount)
+			: cacheValues(cacheValues)
+			, DEBUG_columnCount(columnCount)
+		{
+		}
+		Row(const Row& other)
+			: cacheValues(other.cacheValues)
+			, DEBUG_columnCount(other.DEBUG_columnCount)
+		{
+		}
+#else
+		Row(RelativeParentIndex* cacheValues, SizeType columnCount)
+			: cacheValues(cacheValues)
+		{
+		}
+		Row(const Row& other)
+			: cacheValues(other.cacheValues)
+		{
+		}
+#endif
+
+		inline RelativeParentIndex column(ColumnIndex index) const
+		{
+			FLAT_DEBUG_ASSERT(index < DEBUG_columnCount);
+			return cacheValues[index];
+		}
+		inline RelativeParentIndex& column(ColumnIndex index)
+		{
+			FLAT_DEBUG_ASSERT(index < DEBUG_columnCount);
+			return cacheValues[index];
+		}
+	};
+
+private:
+	struct Buffer
+	{
+		Buffer()
+			: capacity(0)
+			, buffer(NULL)
+		{
+			FLAT_ASSERT(!"What are you doing here?");
+		}
+
+		Buffer(SizeType capacity)
+			: capacity(capacity)
+			, buffer((RelativeParentIndex*)malloc(sizeof(RelativeParentIndex) * capacity))
+		{
+			FLAT_ASSERT(capacity > 0);
+			FLAT_ASSERT(buffer);
+		}
+		void erase()
+		{
+			FLAT_ASSERT(buffer != NULL);
+			free(buffer);
+			buffer = NULL;
+			capacity = 0;
+		}
+
+		RelativeParentIndex* buffer;
+		SizeType capacity;
+	};
+
+public:
+	HierarchyCache()
+		: cacheIsValid(false)
+		, rowCapacity(0)
+		, columnCapacity(0)
+	{
+	}
+	HierarchyCache(RowIndex reserveRows, ColumnIndex reserveColumns)
+		: cacheIsValid(false)
+		, rowCapacity(0)
+		, columnCapacity(0)
+	{
+		reserve(reserveRows, reserveColumns);
+	}
+	~HierarchyCache()
+	{
+		for (SizeType i = 0; i < buffers.getSize(); i++)
+		{
+			buffers[i].erase();
+		}
+	}
+
+	FLAT_VECTOR<Buffer> buffers;
+	FLAT_VECTOR<Row> cacheRows;
+
+	// This is set to false after reserve messes up the cache. User can also set it to false.
+	// Automatically becomes true when makeCacheValid() is run.
+	bool cacheIsValid;
+private:
+	RowIndex rowCapacity;
+	SizeType columnCapacity;
+public:
+	SizeType DEBUG_getColumnCapacity() const
+	{
+		return columnCapacity;
+	}
+	void reserve(RowIndex reserveRows, SizeType reserveColumns)
+	{
+		if (reserveRows <= rowCapacity && reserveColumns <= columnCapacity)
+			return;
+
+		reserveColumns = getNextPowerOfTwo(reserveColumns - 1);
+
+		if (reserveRows > rowCapacity && reserveColumns <= columnCapacity)
+		{
+			// Only adding new rows
+
+			// Store the row count that was requested, not the actual number of cacheRows (allows shuffling memory later if columns are added)
+			rowCapacity = reserveRows;
+
+			if (reserveRows > cacheRows.getSize())
+			{
+				SizeType oldRowCount = cacheRows.getSize();
+				RowIndex targetRowCount = reserveRows + 1024 / reserveColumns;
+				cacheRows.reserve(targetRowCount);
+				buffers.pushBack(Buffer((reserveColumns)* (targetRowCount - cacheRows.getSize())));
+
+				Buffer& b = buffers.getBack();
+				for (SizeType i = 0, end = targetRowCount - cacheRows.getSize(); i < end; i++)
+				{
+					cacheRows.pushBack(Row(b.buffer + i * reserveColumns, reserveColumns));
+				}
+				FLAT_ASSERT(reserveRows == cacheRows.getSize());
+
+				if (cacheIsValid)
+				{
+					// Keep cache valid
+
+					for (RowIndex row = oldRowCount; row < cacheRows.getSize(); row++)
+					{
+						FLAT_MEMSET(cacheRows[row].cacheValues, 0, sizeof(Row::RelativeParentIndex) * columnCapacity);
+					}
+				}
+			}
+			return;
+		}
+
+		// Adding columns and possibly also rows
+
+		cacheIsValid = false; // Shuffling row buffers will always invalidate cache
+		columnCapacity = reserveColumns;
+
+		// Free buffers that have become smaller than columnCapacity
+		{
+			for (SizeType i = 0; i < buffers.getSize(); )
+			{
+				if (buffers[i].capacity < columnCapacity)
+				{
+					buffers[i].erase();
+					buffers[i] = buffers.getBack();
+					buffers.resize(buffers.getSize() - 1);
+					continue;
+				}
+				++i;
+			}
+		}
+
+		RowIndex targetRowCount = rowCapacity;
+		if (reserveRows > rowCapacity)
+		{
+			rowCapacity = reserveRows;
+			targetRowCount = reserveRows + 1024 / columnCapacity;
+		}
+
+		cacheRows.clear();
+		cacheRows.reserve(targetRowCount);
+
+		// Recycle buffers
+		SizeType bufferIndex = 0;
+		while (cacheRows.getSize() < targetRowCount)
+		{
+			if (bufferIndex >= buffers.getSize())
+			{
+				// Create new buffer
+
+				SizeType bufferRowCount = getNextPowerOfTwo(targetRowCount - cacheRows.getSize() - 1);
+				FLAT_ASSERT(bufferRowCount >= targetRowCount - cacheRows.getSize());
+				buffers.pushBack(Buffer(columnCapacity * bufferRowCount));
+			}
+
+			// Distribute buffers to cacheRows
+			Buffer& b = buffers[bufferIndex];
+			++bufferIndex;
+
+			FLAT_ASSERT(b.capacity >= columnCapacity);
+			for (SizeType i = 0, end = b.capacity / columnCapacity; i < end; ++i)
+			{
+				cacheRows.pushBack(Row(b.buffer + (columnCapacity * i), columnCapacity));
+			}
+
+		}
+
+		FLAT_ASSERT(reserveRows <= cacheRows.getSize());
+	}
+
+	Row& row(RowIndex depth)
+	{
+		FLAT_ASSERT(depth < cacheRows.getSize());
+		return cacheRows[depth];
+	}
+	const Row& row(RowIndex depth) const
+	{
+		FLAT_ASSERT(depth < cacheRows.getSize());
+		return cacheRows[depth];
+	}
+
+	void clearValuesOutSide(RowIndex rowIndex, ColumnIndex columnIndex)
+	{
+		FLAT_ASSERT(columnIndex <= columnCapacity);
+		FLAT_ASSERT(rowIndex < cacheRows.getSize());
+
+		for (RowIndex row = 0; row < rowIndex; row++)
+		{
+			FLAT_MEMSET(cacheRows[row].cacheValues + columnIndex, 0, sizeof(Row::RelativeParentIndex) * (columnCapacity - columnIndex));
+		}
+
+		for (RowIndex row = rowIndex; row < cacheRows.getSize(); row++)
+		{
+			FLAT_MEMSET(cacheRows[row].cacheValues, 0, sizeof(Row::RelativeParentIndex) * columnCapacity);
+		}
+	}
+
+	inline bool isChildOf(ColumnIndex child, ColumnIndex parent, RowIndex parentDepth) const
+	{
+		FLAT_ASSERT(cacheIsValid);
+		FLAT_ASSERT(parent <= child || (child - parent) == row(parentDepth).column(child));
+		return (child - parent) == row(parentDepth).column(child);
+	}
+	inline bool getParentIndex(RowIndex parentDepth, ColumnIndex child) const
+	{
+		FLAT_ASSERT(cacheIsValid);
+		return row(parentDepth).column(child);
+	}
+	void makeCacheValid(const FlatHierarchyBase& hierarchy, RowIndex maxDepth = 0)
+	{
+		if (maxDepth == 0)
+			maxDepth = hierarchy.findMaxDepth();
+
+		printf("makeCacheValid(%d)\n", maxDepth);
+
+		FLAT_ASSERT(maxDepth == hierarchy.findMaxDepth());
+
+		reserve(maxDepth, hierarchy.getCount());
+		cacheIsValid = true;
+
+		clearValuesOutSide(maxDepth, hierarchy.getCount());
+
+		for (RowIndex rowNumber = 0; rowNumber < maxDepth; rowNumber++)
+		{
+			Row& row = this->row(rowNumber);
+
+			row.column(0) = 0;
+			for (ColumnIndex i = 1; i < hierarchy.getCount(); i++)
+			{
+				if (hierarchy.depths[i] > rowNumber)
+				{
+					row.column(i) = row.column(i - 1) + 1;
+				}
+				else
+				{
+					row.column(i) = 0;
+				}
+			}
+		}
+	}
+
+	void partialUpdate(const FlatHierarchyBase& hierarchy, ColumnIndex startColumn, ColumnIndex endColumn)
+	{
+		FLAT_ASSERT(endColumn <= hierarchy.getCount());
+
+		//printf("partialCacheUpdate: start: %d, count: %d\n", startColumn, endColumn - startColumn);
+
+		for (RowIndex rowNumber = 0, end = hierarchy.findMaxDepth(); rowNumber < end; rowNumber++)
+		{
+			Row& row = this->row(rowNumber);
+
+			ColumnIndex i = startColumn;
+			if (i == 0)
+			{
+				row.column(0) = 0;
+				++i;
+			}
+
+			for (; i < endColumn; i++)
+			{
+				if (hierarchy.depths[i] > rowNumber)
+				{
+					row.column(i) = row.column(i - 1) + 1;
+				}
+				else
+				{
+					row.column(i) = 0;
+				}
+			}
+		}
+	}
+
+};
+
+struct ArrayCache
+{
+	typedef FlatHierarchyBase::SizeType SizeType;
+	typedef FlatHierarchyBase::SizeType CacheValue;
+	typedef FlatHierarchyBase::HierarchyIndex HierarchyIndex;
+	typedef FlatHierarchyBase::DepthValue DepthValue;
+
+	FLAT_VECTOR<CacheValue> cacheValues;
+	bool cacheIsValid;
+
+	CacheValue operator[] (HierarchyIndex index)
+	{
+		FLAT_ASSERT(index < cacheValues.getSize());
+		return cacheValues[index];
+	}
+
+	void clear()
+	{
+		FLAT_MEMSET(cacheValues.getPointer(), 0, sizeof(CacheValue) * cacheValues.getSize());
+	}
+
+	void reserve(SizeType capacity)
+	{
+		if (cacheValues.getSize() < capacity)
+		{
+			SizeType oldSize = cacheValues.getSize();
+			cacheValues.resize(getNextPowerOfTwo(capacity - 1));
+			if(cacheIsValid)
+				FLAT_MEMSET(cacheValues.getPointer() + oldSize, 0, sizeof(CacheValue) * (cacheValues.getSize() - oldSize));
+		}
+	}
+};
+
+struct NextSiblingCache : public ArrayCache
+{
+	HierarchyIndex getNextSibling(HierarchyIndex parent) const
+	{
+		FLAT_ASSERT(parent < cacheValues.getSize());
+		return cacheValues[parent];
+	}
+
+	// O(MaxDepth/BufferCapacity * N)
+	void makeCacheValid(const FlatHierarchyBase& h)
+	{
+		cacheIsValid = true;
+		SizeType maxDepth = 0; 
+
+		static const SizeType BufferCapacity = 4096 / sizeof(HierarchyIndex);
+		for (DepthValue currentDepth = 0; currentDepth <= maxDepth; currentDepth += BufferCapacity)
+		{
+			HierarchyIndex buffer[BufferCapacity];
+			FLAT_MEMSET(buffer, FlatHierarchyBase::getIndexNotFound(), sizeof(HierarchyIndex) * BufferCapacity);
+
+			for (HierarchyIndex i = h.getCount(); i-- > 0; )
+			{
+				DepthValue d = h.depths[i];
+				if (d - currentDepth < BufferCapacity)
+				{
+					cacheValues[i] = buffer[d - currentDepth];
+					buffer[d - currentDepth] = i;
+				}
+				if (maxDepth < d)
+					maxDepth = d;
+			}
+		}
+	}
+};
+
 
 #endif // FLAT_FLATHIERARCHY_H
