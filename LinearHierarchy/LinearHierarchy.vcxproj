@@ -143,6 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="FlatHierarchy.h" />
+    <ClInclude Include="HierarchyCache.h" />
     <ClInclude Include="Test.h" />
   </ItemGroup>
   <ItemGroup>

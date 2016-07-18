@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+	
+	<Type Name="HierarchyCache">
+		<DisplayString>{{rowCap = {(size_t)rowCapacity}, colCap = {columnCapacity}}}</DisplayString>
+	</Type>
+	
+	<Type Name="HierarchyCacheRow">
+		<DisplayString>{{size = {DEBUG_columnCount}}}</DisplayString>
+		<Expand>
+			<IndexListItems>
+				<Size>DEBUG_columnCount</Size>
+				<ValueNode>cacheValues[$i]</ValueNode>
+			</IndexListItems>
+		</Expand>
+	</Type>
+</AutoVisualizer>
