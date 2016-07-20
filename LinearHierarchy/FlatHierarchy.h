@@ -2,81 +2,93 @@
 #define FLAT_FLATHIERARCHY_H
 
 #ifndef FLAT_VECTOR
-	#include <vector>
-	template<typename ValueType>
-	class FLAT_Vector_Type : public std::vector<ValueType>
-	{
-	public:
-		void pushBack(const ValueType& v) { push_back(v); }
-		size_t getSize() const { return size(); }
-		void insert(size_t index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
-		const ValueType& getBack() const { return back(); }
-		ValueType& getBack() { return back(); }
-		size_t getCapacity() const { return capacity(); }
-		void zero(size_t start, size_t end) { return std::fill(begin() + start, begin() + end, 0); }
-		ValueType* getPointer() { return &*begin(); }
-		void erase(size_t index) { erase(begin() + index); }
-	};
+#include <vector>
+template<typename ValueType>
+class FLAT_Vector_Type : public std::vector<ValueType alignas(16)>
+{
+public:
+	void pushBack(const ValueType& v) { push_back(v); }
+	size_t getSize() const { return size(); }
+	void insert(size_t index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
+	const ValueType& getBack() const { return back(); }
+	ValueType& getBack() { return back(); }
+	size_t getCapacity() const { return capacity(); }
+	void zero(size_t start, size_t end) { return std::fill(begin() + start, begin() + end, 0); }
+	ValueType* getPointer() { return &*begin(); }
+	const ValueType* getPointer() const { return &*begin(); }
+	void erase(size_t index) { std::vector<ValueType>::erase(begin() + index); }
+};
 
-	#define FLAT_VECTOR FLAT_Vector_Type
+#define FLAT_VECTOR FLAT_Vector_Type
 #endif
-	
+
 #ifndef FLAT_SIZETYPE
-	#include <inttypes.h>
-	#define FLAT_SIZETYPE uint32_t
+#include <inttypes.h>
+#define FLAT_SIZETYPE uint32_t
 #endif
-	
+
 #ifndef FLAT_DEPTHTYPE
-	#include <inttypes.h>
-	#define FLAT_DEPTHTYPE uint8_t
+#include <inttypes.h>
+#define FLAT_DEPTHTYPE uint8_t
 #endif
 
 static_assert((FLAT_DEPTHTYPE)(0) < (FLAT_DEPTHTYPE)(-1), "FLAT_DEPTHTYPE must be unsigned");
 
 #ifndef FLAT_MAXDEPTH
-	// Exclude most significant bit to prevent roll over errors
-	#define FLAT_MAXDEPTH ((FLAT_DEPTHTYPE)(~0) >> 1)
+// Exclude most significant bit to prevent roll over errors
+#define FLAT_MAXDEPTH ((FLAT_DEPTHTYPE)(~0) >> 1)
 #endif
 
 #ifndef FLAT_ASSERT
-	#if FLAT_ASSERTS_ENABLED == true
-		#include <assert.h>
-		#define FLAT_ASSERT(expr) assert(expr)
-	#else
-		#define FLAT_ASSERT(expr) do{}while(false)
-	#endif
+#if FLAT_ASSERTS_ENABLED == true
+#include <assert.h>
+#define FLAT_ASSERT(expr) assert(expr)
+#else
+#define FLAT_ASSERT(expr) do{}while(false)
+#endif
 #endif
 
 #ifndef FLAT_DEBUGGING_ENABLED
-	#ifdef _DEBUG
-		#define FLAT_DEBUGGING_ENABLED true
-	#else
-		#define FLAT_DEBUGGING_ENABLED false
-	#endif
+#ifdef _DEBUG
+#define FLAT_DEBUGGING_ENABLED true
+#else
+#define FLAT_DEBUGGING_ENABLED false
+#endif
 #endif
 
 #if FLAT_DEBUGGING_ENABLED == true
-	#define FLAT_DEBUG_ASSERT(...) FLAT_ASSERT(__VA_ARGS__)
+#define FLAT_DEBUG_ASSERT(...) FLAT_ASSERT(__VA_ARGS__)
 #else
-	#define FLAT_DEBUG_ASSERT(...) do{}while(false)
+#define FLAT_DEBUG_ASSERT(...) do{}while(false)
 #endif
 
 #ifndef FLAT_ERROR
-	#define FLAT_ERROR(string) FLAT_ASSERT(!(string))
+#define FLAT_ERROR(string) FLAT_ASSERT(!(string))
 #endif
-	
+
 #ifndef FLAT_MEMCPY
-	#include <string.h>
-	#define FLAT_MEMSET memset
+#include <string.h>
+#define FLAT_MEMSET memset
 #endif
 #ifndef FLAT_MEMCPY
-	#include <string.h>
-	#define FLAT_MEMCPY memcpy
+#include <string.h>
+#define FLAT_MEMCPY memcpy
 #endif
 #ifndef FLAT_MEMMOVE
-	#include <string.h>
-	#define FLAT_MEMMOVE memcpy
+#include <string.h>
+#define FLAT_MEMMOVE memcpy
 #endif
+
+
+#if true // use SIMD
+#include <emmintrin.h>
+//#include <immintrin.h>
+//#include <smmintrin.h>
+#define FLAT_USE_SIMD true
+#else
+#define FLAT_USE_SIMD false
+#endif
+
 
 
 static uint32_t getNextPowerOfTwo(uint32_t v)
@@ -112,15 +124,175 @@ public:
 	{
 		return depths.getSize();
 	}
-	DepthValue findMaxDepth() const
+
+	__declspec(noinline)
+		DepthValue findMaxDepth() const
 	{
 		DepthValue result = 0;
+#if FLAT_USE_SIMD == false
 		for (HierarchyIndex i = 0; i < getCount(); i++)
 		{
 			if (depths[i] > result)
 				result = depths[i];
 		}
 		return result;
+#else
+		enum { Bytes = sizeof(DepthValue) }; // Make Bytes an enum to ensure it is used as compile-time constant
+		static_assert(Bytes == 1 || Bytes == 2 || Bytes == 4 || Bytes > 4, "Byte count mismatch");
+
+		if (Bytes <= 4) // DepthValue == uint8_t / uint16_t / uint32_t
+		{
+			FLAT_ASSERT(Bytes == 1 || Bytes == 2 || Bytes == 4);
+
+			SizeType bytesLeft = getCount() * Bytes;
+			const uint8_t* data = (const uint8_t*)depths.getPointer();
+
+			FLAT_ASSERT((((uintptr_t)data) & 0xF) == 0);
+
+			while ((((uintptr_t)data) & 0xF) != 0)
+			{
+				if (result < *data)
+					result = *data;
+				data += Bytes;
+				bytesLeft -= Bytes;
+			}
+
+			FLAT_ASSERT((((uintptr_t)data) & 0xF) == 0);
+
+			__m128i res = _mm_setzero_si128();
+			__m128i max0 = _mm_setzero_si128();
+			__m128i max1 = _mm_setzero_si128();
+			__m128i max2 = _mm_setzero_si128();
+			__m128i max3 = _mm_setzero_si128();
+
+			while (bytesLeft >= 64)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+				__m128i in1 = _mm_load_si128((const __m128i*)data + 1);
+				__m128i in2 = _mm_load_si128((const __m128i*)data + 2);
+				__m128i in3 = _mm_load_si128((const __m128i*)data + 3);
+
+				if (Bytes == 1) max0 = _mm_max_epu8(max0, in0);
+				if (Bytes == 1) max1 = _mm_max_epu8(max1, in1);
+				if (Bytes == 1) max2 = _mm_max_epu8(max2, in2);
+				if (Bytes == 1) max3 = _mm_max_epu8(max3, in3);
+
+				if (Bytes == 2) max0 = _mm_max_epu16(max0, in0);
+				if (Bytes == 2) max1 = _mm_max_epu16(max1, in1);
+				if (Bytes == 2) max2 = _mm_max_epu16(max2, in2);
+				if (Bytes == 2) max3 = _mm_max_epu16(max3, in3);
+
+				if (Bytes == 4) max0 = _mm_max_epu32(max0, in0);
+				if (Bytes == 4) max1 = _mm_max_epu32(max1, in1);
+				if (Bytes == 4) max2 = _mm_max_epu32(max2, in2);
+				if (Bytes == 4) max3 = _mm_max_epu32(max3, in3);
+
+				data += 64;
+				bytesLeft -= 64;
+			}
+
+			if (bytesLeft >= 48)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+				__m128i in1 = _mm_load_si128((const __m128i*)data + 1);
+				__m128i in2 = _mm_load_si128((const __m128i*)data + 2);
+
+				if (Bytes == 1) max0 = _mm_max_epu8(max0, in0);
+				if (Bytes == 1) max1 = _mm_max_epu8(max1, in1);
+				if (Bytes == 1) max2 = _mm_max_epu8(max2, in2);
+
+				if (Bytes == 2) max0 = _mm_max_epu16(max0, in0);
+				if (Bytes == 2) max1 = _mm_max_epu16(max1, in1);
+				if (Bytes == 2) max2 = _mm_max_epu16(max2, in2);
+
+				if (Bytes == 4) max0 = _mm_max_epu32(max0, in0);
+				if (Bytes == 4) max1 = _mm_max_epu32(max1, in1);
+				if (Bytes == 4) max2 = _mm_max_epu32(max2, in2);
+
+				data += 48;
+				bytesLeft -= 48;
+			}
+			else if (bytesLeft >= 32)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+				__m128i in1 = _mm_load_si128((const __m128i*)data + 1);
+
+				if (Bytes == 1) max0 = _mm_max_epu8(max0, in0);
+				if (Bytes == 1) max1 = _mm_max_epu8(max1, in1);
+
+				if (Bytes == 2) max0 = _mm_max_epu16(max0, in0);
+				if (Bytes == 2) max1 = _mm_max_epu16(max1, in1);
+
+				if (Bytes == 4) max0 = _mm_max_epu32(max0, in0);
+				if (Bytes == 4) max1 = _mm_max_epu32(max1, in1);
+
+				data += 32;
+				bytesLeft -= 32;
+			}
+			else if (bytesLeft >= 16)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+
+				if (Bytes == 1) max0 = _mm_max_epu8(max0, in0);
+				if (Bytes == 2) max0 = _mm_max_epu16(max0, in0);
+				if (Bytes == 4) max0 = _mm_max_epu32(max0, in0);
+
+				data += 16;
+				bytesLeft -= 16;
+			}
+
+			// Collect all max values
+			{
+				if (Bytes == 1) res = _mm_max_epu8(_mm_max_epu8(max0, max1), _mm_max_epu8(max2, max3));
+				if (Bytes == 2) res = _mm_max_epu8(_mm_max_epu8(max0, max1), _mm_max_epu8(max2, max3));
+				if (Bytes == 4) res = _mm_max_epu8(_mm_max_epu8(max0, max1), _mm_max_epu8(max2, max3));
+			}
+
+			// Shift and compare max values to last byte
+			{
+				if (Bytes == 1) res = _mm_max_epu8(res, _mm_srli_si128(res, 8));
+				if (Bytes == 1) res = _mm_max_epu8(res, _mm_srli_si128(res, 4));
+				if (Bytes == 1) res = _mm_max_epu8(res, _mm_srli_si128(res, 2));
+				if (Bytes == 1) res = _mm_max_epu8(res, _mm_srli_si128(res, 1));
+
+				if (Bytes == 2) res = _mm_max_epu16(res, _mm_srli_si128(res, 8));
+				if (Bytes == 2) res = _mm_max_epu16(res, _mm_srli_si128(res, 4));
+				if (Bytes == 2) res = _mm_max_epu16(res, _mm_srli_si128(res, 2));
+
+				if (Bytes == 4) res = _mm_max_epu32(res, _mm_srli_si128(res, 8));
+				if (Bytes == 4) res = _mm_max_epu32(res, _mm_srli_si128(res, 4));
+			}
+			result = (DepthValue)_mm_cvtsi128_si32(res);
+
+			while (bytesLeft > 0)
+			{
+				FLAT_ASSERT(bytesLeft <= Bytes);
+
+				if (result < *(DepthValue*)data)
+					result = *(DepthValue*)data;
+				data += Bytes;
+				bytesLeft -= Bytes;
+			}
+		}
+		else // sizeof(DepthValue) > 4
+		{
+			for (HierarchyIndex i = 0; i < getCount(); i++)
+			{
+				if (depths[i] > result)
+					result = depths[i];
+			}
+		}
+		{ // Correctness check
+			SizeType check = 0;
+			for (HierarchyIndex i = 0; i < getCount(); i++)
+			{
+				if (check < depths[i])
+					check = depths[i];
+			}
+			FLAT_ASSERT(check == result);
+		}
+		return result;
+#endif
 	}
 
 	static HierarchyIndex getIndexNotFound() { return HierarchyIndex(~0); }
@@ -141,7 +313,7 @@ public:
 	~FlatHierarchy()
 	{
 	}
-	
+
 	HierarchyIndex createRootNode(const ValueType& value)
 	{
 		HierarchyIndex newIndex = getCount();
@@ -167,9 +339,11 @@ public:
 			values.pushBack(value);
 			depths.pushBack((DepthValue)0U);
 		}
+
 		return newIndex;
 	}
-	HierarchyIndex createNodeAsChildOf(HierarchyIndex parentIndex, ValueType value)
+
+	HierarchyIndex createNodeAsChildOf(HierarchyIndex parentIndex, const ValueType& value)
 	{
 		SizeType newIndex = parentIndex + 1;
 
@@ -213,11 +387,11 @@ public:
 	HierarchyIndex makeChildOf(HierarchyIndex child, HierarchyIndex parent)
 	{
 		//printf("Make %d child of %d\n", child, parent);
-		
+
 		FLAT_ASSERT(child != parent && "Self-adoption");
 		FLAT_ASSERT(!linearIsChildOf(parent, child) && "Incest");
 		FLAT_ASSERT((depths[child] != depths[parent] + 1 || !linearIsChildOf(child, parent)) && "Re-parenting");
-		
+
 		SizeType dest = parent + 1; // Default destination position is right after parent
 		SizeType count = getLastDescendant(child) - child + 1; // Descendant count including the child
 		FLAT_ASSERT(count > 0);
@@ -265,7 +439,7 @@ public:
 		if (source != dest && source + count != dest)
 		{
 			move(source, dest, count);
-		} 
+		}
 
 		if (source < dest)
 		{
@@ -319,7 +493,7 @@ public:
 
 		// Push to buffer
 		FLAT_MEMCPY(depthBuffer, dPtr + source, count * sizeof(DepthValue));
-		FLAT_MEMCPY(valueBuffer, vPtr + source, count * sizeof(ValueType) );
+		FLAT_MEMCPY(valueBuffer, vPtr + source, count * sizeof(ValueType));
 
 		// Shift buffer backward or forward depending on the order of source and destination
 		if (source < dest)

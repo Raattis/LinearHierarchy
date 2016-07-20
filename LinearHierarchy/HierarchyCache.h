@@ -534,13 +534,15 @@ FlatHierarchyBase::HierarchyIndex makeChildOf(FlatHierarchy<ValueType, Sorter>& 
 		{
 			// If child's index is greater than parent, find a place in parents children that is closest to child's current position
 			FlatHierarchyBase::DepthValue targetDepth = h.depths[parent] + 1;
-			for (FlatHierarchyBase::HierarchyIndex i = parent + 1; i < child; ++i)
+
+			for (FlatHierarchyBase::HierarchyIndex currentPlace = parent + 1
+				; currentPlace < child
+				; currentPlace = descendantCache.getLastDescendant(h, currentPlace) + 1)
 			{
-				if (h.depths[i] > targetDepth)
-					continue;
-				if (h.depths[i] < targetDepth)
+				FLAT_ASSERT(h.depths[currentPlace] <= targetDepth);
+				if (h.depths[currentPlace] < targetDepth)
 					break;
-				dest = i;
+				dest = currentPlace;
 			}
 		}
 	}
@@ -596,5 +598,121 @@ void erase(FlatHierarchy<ValueType, Sorter>& h, LastDescendantCache& descendantC
 
 }
 
+template<typename ValueType, typename Sorter>
+FlatHierarchyBase::HierarchyIndex createNodeAsChildOf(FlatHierarchy<ValueType, Sorter>& h, LastDescendantCache& descendantCache, FlatHierarchyBase::HierarchyIndex parentIndex, const ValueType& value)
+{
+	SizeType newIndex = parentIndex + 1;
+
+	if (Sorter::UseSorting == true)
+	{
+		// Default to last possible index
+		newIndex = descendantCache.getLastDescendant(h, parentIndex) + 1;
+
+		// Insert to sorted position
+		FlatHierarchyBase::DepthValue targetDepth = h.depths[parentIndex] + 1;
+		for (SizeType i = parentIndex + 1; i < newIndex; ++i)
+		{
+			if (h.depths[i] == targetDepth && Sorter::isFirst(value, h.values[i]))
+			{
+				newIndex = i;
+				break;
+			}
+		}
+	}
+	else
+	{
+		// NOTE: Cache structure is not useful if not using sorting. Post warning?
+	}
+
+	FLAT_ASSERT(newIndex > parentIndex);
+
+	SizeType newParentCount = h.depths[parentIndex] + 1;
+	FLAT_ASSERT(newParentCount < FLAT_MAXDEPTH); // Over flow protection
+
+	h.values.insert(newIndex, value);
+	h.depths.insert(newIndex, newParentCount);
+
+	// TODO: Update cache
+	descendantCache.cacheIsValid = false;
+
+	return newIndex;
+}
+
+template<typename ValueType, typename Sorter>
+FlatHierarchyBase::HierarchyIndex createRootNode(FlatHierarchyBase& h, NextSiblingCache& siblingCache, const ValueType& value)
+{
+	FlatHierarchyBase::HierarchyIndex newIndex = h.getCount();
+
+	if (Sorter::UseSorting == true)
+	{
+		// Insert to sorted position
+
+		FlatHierarchyBase::HierarchyIndex currentPlace = 0;
+		while (currentPlace < newIndex)
+		{
+			if (Sorter::isFirst(value, h.values[currentPlace]))
+			{
+				newIndex = currentPlace;
+				break;
+			}
+			currentPlace = siblingCache[currentPlace];
+		}
+
+		h.values.insert(newIndex, value);
+		h.depths.insert(newIndex, (FlatHierarchyBase::DepthValue)0U);
+	}
+	else
+	{
+		// NOTE: Cache structure is not useful if not using sorting. Post warning?
+
+		h.values.pushBack(value);
+		h.depths.pushBack((FlatHierarchyBase::DepthValue)0U);
+	}
+
+	// TODO: Update cache
+	siblingCache.cacheIsValid = false;
+
+	return newIndex;
+}
+
+template<typename ValueType, typename Sorter>
+FlatHierarchyBase::HierarchyIndex createRootNode(FlatHierarchy<ValueType, Sorter>& h, LastDescendantCache& descendantCache, const ValueType& value)
+{
+	FlatHierarchyBase::HierarchyIndex newIndex = h.getCount();
+
+	if (Sorter::UseSorting == true)
+	{
+		// Insert to sorted position
+
+		if (!descendantCache.cacheIsValid)
+			descendantCache.makeCacheValid(h);
+
+		FlatHierarchyBase::HierarchyIndex currentPlace = 0;
+		while (currentPlace < newIndex)
+		{
+			if (Sorter::isFirst(value, h.values[currentPlace]))
+			{
+				newIndex = currentPlace;
+				break;
+			}
+			currentPlace = descendantCache[currentPlace] + 1;
+		}
+
+		h.values.insert(newIndex, value);
+		h.depths.insert(newIndex, (FlatHierarchyBase::DepthValue)0U);
+	}
+	else
+	{
+		// NOTE: Cache structure is not useful if not using sorting. Post warning?
+
+		h.values.pushBack(value);
+		h.depths.pushBack((FlatHierarchyBase::DepthValue)0U);
+	}
+
+	// TODO: Update cache
+	descendantCache.cacheIsValid = false;
+
+	return newIndex;
+}
 
 #endif

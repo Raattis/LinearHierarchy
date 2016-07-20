@@ -5,7 +5,7 @@
 
 int main()
 {
-	FLAT_test();
-
+	test();
+	
     return 0;
 }
