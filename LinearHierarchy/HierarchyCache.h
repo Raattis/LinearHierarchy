@@ -1,7 +1,34 @@
 #ifndef FLAT_HIERARCHYCACHE_H
 #define FLAT_HIERARCHYCACHE_H
 
+#include "FlatAssert.h"
 #include "FlatHierarchy.h"
+
+#ifdef _DEBUG
+	#define FLAT_DEBUG_ASSERT(...) FLAT_ASSERT(__VA_ARGS__)
+#else
+	#define FLAT_DEBUG_ASSERT(...) do{}while(false)
+#endif
+
+#ifndef FLAT_DEBUGGING_ENABLED
+	#ifdef _DEBUG
+		#define FLAT_DEBUGGING_ENABLED true
+	#else
+		#define FLAT_DEBUGGING_ENABLED false
+	#endif
+#endif
+
+static uint32_t getNextPowerOfTwo(uint32_t v)
+{
+	FLAT_ASSERT((v & 0x80000000) == 0);
+
+	uint32_t r = 0;
+	while (v >>= 1)
+	{
+		++r;
+	}
+	return 1 << (r + 1);
+}
 
 
 struct HierarchyCache

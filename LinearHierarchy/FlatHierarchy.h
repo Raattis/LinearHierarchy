@@ -1,116 +1,52 @@
 #ifndef FLAT_FLATHIERARCHY_H
 #define FLAT_FLATHIERARCHY_H
 
-#ifndef FLAT_VECTOR
-#include <vector>
-template<typename ValueType>
-class FLAT_Vector_Type : public std::vector<ValueType alignas(16)>
-{
-public:
-	void pushBack(const ValueType& v) { push_back(v); }
-	size_t getSize() const { return size(); }
-	void insert(size_t index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
-	const ValueType& getBack() const { return back(); }
-	ValueType& getBack() { return back(); }
-	size_t getCapacity() const { return capacity(); }
-	void zero(size_t start, size_t end) { return std::fill(begin() + start, begin() + end, 0); }
-	ValueType* getPointer() { return &*begin(); }
-	const ValueType* getPointer() const { return &*begin(); }
-	void erase(size_t index) { std::vector<ValueType>::erase(begin() + index); }
-};
+#include "FlatAssert.h"
 
-#define FLAT_VECTOR FLAT_Vector_Type
-#endif
-
-#ifndef FLAT_SIZETYPE
 #include <inttypes.h>
 #define FLAT_SIZETYPE uint32_t
-#endif
+#define FLAT_DEPTHTYPE uint16_t
 
-#ifndef FLAT_DEPTHTYPE
-#include <inttypes.h>
-#define FLAT_DEPTHTYPE uint8_t
-#endif
-
-static_assert((FLAT_DEPTHTYPE)(0) < (FLAT_DEPTHTYPE)(-1), "FLAT_DEPTHTYPE must be unsigned");
-
-#ifndef FLAT_MAXDEPTH
-// Exclude most significant bit to prevent roll over errors
+// Exclude most significant bit to catch roll over errors
 #define FLAT_MAXDEPTH ((FLAT_DEPTHTYPE)(~0) >> 1)
-#endif
 
-#ifndef FLAT_ASSERT
-#if FLAT_ASSERTS_ENABLED == true
-#include <assert.h>
-#define FLAT_ASSERT(expr) assert(expr)
-#else
-#define FLAT_ASSERT(expr) do{}while(false)
-#endif
-#endif
-
-#ifndef FLAT_DEBUGGING_ENABLED
-#ifdef _DEBUG
-#define FLAT_DEBUGGING_ENABLED true
-#else
-#define FLAT_DEBUGGING_ENABLED false
-#endif
-#endif
-
-#if FLAT_DEBUGGING_ENABLED == true
-#define FLAT_DEBUG_ASSERT(...) FLAT_ASSERT(__VA_ARGS__)
-#else
-#define FLAT_DEBUG_ASSERT(...) do{}while(false)
-#endif
-
-#ifndef FLAT_ERROR
 #define FLAT_ERROR(string) FLAT_ASSERT(!(string))
-#endif
 
-#ifndef FLAT_MEMCPY
-#include <string.h>
+#include <string.h> /* memset, memcpy, memmoce*/
 #define FLAT_MEMSET memset
-#endif
-#ifndef FLAT_MEMCPY
-#include <string.h>
 #define FLAT_MEMCPY memcpy
-#endif
-#ifndef FLAT_MEMMOVE
-#include <string.h>
-#define FLAT_MEMMOVE memcpy
-#endif
+#define FLAT_MEMMOVE memmove
 
-
-#if true // use SIMD
 #include <emmintrin.h>
-//#include <immintrin.h>
-//#include <smmintrin.h>
 #define FLAT_USE_SIMD true
-#else
-#define FLAT_USE_SIMD false
+
+#ifndef FLAT_VECTOR
+	#include <vector>
+	template<typename ValueType>
+	class FLAT_Vector_Type : public std::vector<ValueType alignas(16)>
+	{
+	public:
+		void pushBack(const ValueType& v) { push_back(v); }
+		size_t getSize() const { return size(); }
+		void insert(size_t index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
+		const ValueType& getBack() const { return back(); }
+		ValueType& getBack() { return back(); }
+		size_t getCapacity() const { return capacity(); }
+		void zero(size_t start, size_t end) { return std::fill(begin() + start, begin() + end, 0); }
+		ValueType* getPointer() { return &*begin(); }
+		const ValueType* getPointer() const { return &*begin(); }
+		void erase(size_t index) { std::vector<ValueType>::erase(begin() + index); }
+	};
+	
+	#define FLAT_VECTOR FLAT_Vector_Type
 #endif
 
-
-
-static uint32_t getNextPowerOfTwo(uint32_t v)
-{
-	FLAT_ASSERT((v & 0x80000000) == 0);
-
-	uint32_t r = 0;
-	while (v >>= 1)
-	{
-		++r;
-	}
-	return 1 << (r + 1);
-}
-
-struct DefaultSorter
-{
-	static const bool UseSorting = true;
-
-	template<typename T>
-	inline static bool isFirst(const T& a, const T& b) { return a < b; }
-};
-
+/////////////////////////////////////////////////////////////////
+//
+// Base implementation containing only a depths-vector
+// Mostly used by cache structures to determine node relations
+//
+/////////////////////////////////////////////////////////////////
 class FlatHierarchyBase
 {
 public:
@@ -120,10 +56,14 @@ public:
 
 	FLAT_VECTOR<DepthValue> depths;
 
+
+
 	SizeType getCount() const
 	{
 		return depths.getSize();
 	}
+
+
 
 	__declspec(noinline)
 		DepthValue findMaxDepth() const
@@ -149,7 +89,7 @@ public:
 
 			FLAT_ASSERT((((uintptr_t)data) & 0xF) == 0);
 
-			while ((((uintptr_t)data) & 0xF) != 0)
+			while (bytesLeft > 0 && (((uintptr_t)data) & 0xF) != 0)
 			{
 				if (result < *data)
 					result = *data;
@@ -266,7 +206,7 @@ public:
 
 			while (bytesLeft > 0)
 			{
-				FLAT_ASSERT(bytesLeft <= Bytes);
+				FLAT_ASSERT(bytesLeft >= Bytes);
 
 				if (result < *(DepthValue*)data)
 					result = *(DepthValue*)data;
@@ -282,20 +222,209 @@ public:
 					result = depths[i];
 			}
 		}
-		{ // Correctness check
-			SizeType check = 0;
-			for (HierarchyIndex i = 0; i < getCount(); i++)
-			{
-				if (check < depths[i])
-					check = depths[i];
-			}
-			FLAT_ASSERT(check == result);
+#ifdef MAX_PERF
+		//{ // Correctness check
+		//	SizeType check = 0;
+		//	for (HierarchyIndex i = 0; i < getCount(); i++)
+		//	{
+		//		if (check < depths[i])
+		//			check = depths[i];
+		//	}
+		//	FLAT_ASSERT(check == result);
+		//}
+#endif
+		return result;
+#endif
+	}
+
+	__declspec(noinline)
+		DepthValue findMinDepthBetween(HierarchyIndex first, HierarchyIndex last) const
+	{
+		FLAT_ASSERT(last < getCount());
+		FLAT_ASSERT(first <= last);
+
+		DepthValue result = 0;
+#if FLAT_USE_SIMD == false
+		for (HierarchyIndex i = first; i <= last; i++)
+		{
+			if (depths[i] < result)
+				result = depths[i];
 		}
+		return result;
+#else
+		enum { Bytes = sizeof(DepthValue) }; // Make Bytes an enum to ensure it is used as compile-time constant
+		static_assert(Bytes == 1 || Bytes == 2 || Bytes == 4 || Bytes > 4, "Byte count mismatch");
+
+		if (Bytes <= 4 && first + 16 / Bytes <= last) // DepthValue == uint8_t / uint16_t / uint32_t
+		{
+			FLAT_ASSERT(Bytes == 1 || Bytes == 2 || Bytes == 4);
+
+			SizeType bytesLeft = (last + 1 - first) * Bytes;
+
+			FLAT_ASSERT(bytesLeft / Bytes < getCount());
+
+			const uint8_t* data = (const uint8_t*)depths.getPointer() + first;
+
+			while (bytesLeft > 0 && (((uintptr_t)data) & 0xF) != 0)
+			{
+				if (result > *data)
+					result = *data;
+				data += Bytes;
+				bytesLeft -= Bytes;
+			}
+
+			__m128i res = _mm_setzero_si128();
+			__m128i min0 = _mm_setzero_si128();
+			__m128i min1 = _mm_setzero_si128();
+			__m128i min2 = _mm_setzero_si128();
+			__m128i min3 = _mm_setzero_si128();
+
+			while (bytesLeft >= 64)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+				__m128i in1 = _mm_load_si128((const __m128i*)data + 1);
+				__m128i in2 = _mm_load_si128((const __m128i*)data + 2);
+				__m128i in3 = _mm_load_si128((const __m128i*)data + 3);
+
+				if (Bytes == 1) min0 = _mm_min_epu8(min0, in0);
+				if (Bytes == 1) min1 = _mm_min_epu8(min1, in1);
+				if (Bytes == 1) min2 = _mm_min_epu8(min2, in2);
+				if (Bytes == 1) min3 = _mm_min_epu8(min3, in3);
+
+				if (Bytes == 2) min0 = _mm_min_epu16(min0, in0);
+				if (Bytes == 2) min1 = _mm_min_epu16(min1, in1);
+				if (Bytes == 2) min2 = _mm_min_epu16(min2, in2);
+				if (Bytes == 2) min3 = _mm_min_epu16(min3, in3);
+
+				if (Bytes == 4) min0 = _mm_min_epu32(min0, in0);
+				if (Bytes == 4) min1 = _mm_min_epu32(min1, in1);
+				if (Bytes == 4) min2 = _mm_min_epu32(min2, in2);
+				if (Bytes == 4) min3 = _mm_min_epu32(min3, in3);
+
+				data += 64;
+				bytesLeft -= 64;
+			}
+
+			if (bytesLeft >= 48)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+				__m128i in1 = _mm_load_si128((const __m128i*)data + 1);
+				__m128i in2 = _mm_load_si128((const __m128i*)data + 2);
+
+				if (Bytes == 1) min0 = _mm_min_epu8(min0, in0);
+				if (Bytes == 1) min1 = _mm_min_epu8(min1, in1);
+				if (Bytes == 1) min2 = _mm_min_epu8(min2, in2);
+
+				if (Bytes == 2) min0 = _mm_min_epu16(min0, in0);
+				if (Bytes == 2) min1 = _mm_min_epu16(min1, in1);
+				if (Bytes == 2) min2 = _mm_min_epu16(min2, in2);
+
+				if (Bytes == 4) min0 = _mm_min_epu32(min0, in0);
+				if (Bytes == 4) min1 = _mm_min_epu32(min1, in1);
+				if (Bytes == 4) min2 = _mm_min_epu32(min2, in2);
+
+				data += 48;
+				bytesLeft -= 48;
+			}
+			else if (bytesLeft >= 32)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+				__m128i in1 = _mm_load_si128((const __m128i*)data + 1);
+
+				if (Bytes == 1) min0 = _mm_min_epu8(min0, in0);
+				if (Bytes == 1) min1 = _mm_min_epu8(min1, in1);
+
+				if (Bytes == 2) min0 = _mm_min_epu16(min0, in0);
+				if (Bytes == 2) min1 = _mm_min_epu16(min1, in1);
+
+				if (Bytes == 4) min0 = _mm_min_epu32(min0, in0);
+				if (Bytes == 4) min1 = _mm_min_epu32(min1, in1);
+
+				data += 32;
+				bytesLeft -= 32;
+			}
+			else if (bytesLeft >= 16)
+			{
+				__m128i in0 = _mm_load_si128((const __m128i*)data + 0);
+
+				if (Bytes == 1) min0 = _mm_min_epu8(min0, in0);
+				if (Bytes == 2) min0 = _mm_min_epu16(min0, in0);
+				if (Bytes == 4) min0 = _mm_min_epu32(min0, in0);
+
+				data += 16;
+				bytesLeft -= 16;
+			}
+
+			// Collect all min values
+			{
+				if (Bytes == 1) res = _mm_min_epu8(_mm_min_epu8(min0, min1), _mm_min_epu8(min2, min3));
+				if (Bytes == 2) res = _mm_min_epu8(_mm_min_epu8(min0, min1), _mm_min_epu8(min2, min3));
+				if (Bytes == 4) res = _mm_min_epu8(_mm_min_epu8(min0, min1), _mm_min_epu8(min2, min3));
+			}
+
+			// Shift and compare min values to last byte
+			{
+				if (Bytes == 1) res = _mm_min_epu8(res, _mm_srli_si128(res, 8));
+				if (Bytes == 1) res = _mm_min_epu8(res, _mm_srli_si128(res, 4));
+				if (Bytes == 1) res = _mm_min_epu8(res, _mm_srli_si128(res, 2));
+				if (Bytes == 1) res = _mm_min_epu8(res, _mm_srli_si128(res, 1));
+
+				if (Bytes == 2) res = _mm_min_epu16(res, _mm_srli_si128(res, 8));
+				if (Bytes == 2) res = _mm_min_epu16(res, _mm_srli_si128(res, 4));
+				if (Bytes == 2) res = _mm_min_epu16(res, _mm_srli_si128(res, 2));
+
+				if (Bytes == 4) res = _mm_min_epu32(res, _mm_srli_si128(res, 8));
+				if (Bytes == 4) res = _mm_min_epu32(res, _mm_srli_si128(res, 4));
+			}
+			result = (DepthValue)_mm_cvtsi128_si32(res);
+
+			while (bytesLeft > 0)
+			{
+				FLAT_ASSERT(bytesLeft >= Bytes);
+
+				if (result > *(DepthValue*)data)
+					result = *(DepthValue*)data;
+				data += Bytes;
+				bytesLeft -= Bytes;
+			}
+		}
+		else // sizeof(DepthValue) > 4
+		{
+			for (HierarchyIndex i = first; i <= last; i++)
+			{
+				if (result > depths[i])
+					result = depths[i];
+			}
+			return result;
+		}
+#ifdef MAX_PERF
+		//{ // Correctness check
+		//	SizeType check = 0;
+		//	for (HierarchyIndex i = first; i <= last; i++)
+		//	{
+		//		if (check > depths[i])
+		//			check = depths[i];
+		//	}
+		//	FLAT_ASSERT(check == result);
+		//}
+#endif
 		return result;
 #endif
 	}
 
 	static HierarchyIndex getIndexNotFound() { return HierarchyIndex(~0); }
+};
+
+
+
+
+
+struct DefaultSorter
+{
+	static const bool UseSorting = true;
+
+	template<typename T>
+	inline static bool isFirst(const T& a, const T& b) { return a < b; }
 };
 
 template<typename ValueType, typename Sorter = DefaultSorter>
@@ -390,7 +519,7 @@ public:
 
 		FLAT_ASSERT(child != parent && "Self-adoption");
 		FLAT_ASSERT(!linearIsChildOf(parent, child) && "Incest");
-		FLAT_ASSERT((depths[child] != depths[parent] + 1 || !linearIsChildOf(child, parent)) && "Re-parenting");
+		//FLAT_ASSERT((depths[child] != depths[parent] + 1 || !linearIsChildOf(child, parent)) && "Re-parenting");
 
 		SizeType dest = parent + 1; // Default destination position is right after parent
 		SizeType count = getLastDescendant(child) - child + 1; // Descendant count including the child
@@ -414,19 +543,20 @@ public:
 		}
 		else
 		{
-			if (child > parent)
-			{
-				// If child's index is greater than parent, find a place in parents children that is closest to child's current position
-				DepthValue targetDepth = depths[parent] + 1;
-				for (HierarchyIndex i = parent + 1; i < child; ++i)
-				{
-					if (depths[i] > targetDepth)
-						continue;
-					if (depths[i] < targetDepth)
-						break;
-					dest = i;
-				}
-			}
+			// Commented to unify behavior with pointer trees
+			//if (child > parent)
+			//{
+			//	// If child's index is greater than parent, find a place in parents children that is closest to child's current position
+			//	DepthValue targetDepth = depths[parent] + 1;
+			//	for (HierarchyIndex i = parent + 1; i < child; ++i)
+			//	{
+			//		if (depths[i] > targetDepth)
+			//			continue;
+			//		if (depths[i] < targetDepth)
+			//			break;
+			//		dest = i;
+			//	}
+			//}
 		}
 
 		// Do the move
@@ -450,7 +580,9 @@ public:
 		for (SizeType i = 0; i < count; i++)
 		{
 			depths[dest + i] += depthDiff;
-			FLAT_ASSERT(depths[dest + i] < FLAT_MAXDEPTH && "Over/Under-flow threat detected"); // Over flow protection
+#define TO_STR_IMPL(p) #p
+#define TO_STR(p) TO_STR_IMPL(p)
+			FLAT_ASSERT(depths[dest + i] < FLAT_MAXDEPTH && "Over/Under-flow threat detected: " TO_STR(FLAT_MAXDEPTH)); // Over flow protection
 		}
 		return dest;
 	}
@@ -523,13 +655,13 @@ public:
 		if (child <= parent || depths[child] <= depths[parent])
 			return false;
 
-		DepthValue parentDepth = depths[parent];
-		for (HierarchyIndex c = parent + 1; c < child; ++c)
+		if (parent + 1 == child)
 		{
-			if (depths[c] <= parentDepth)
-				return false;
+			FLAT_ASSERT(depths[parent] + 1 == depths[child]);
+			return true;
 		}
-		return true;
+
+		return depths[parent] < findMinDepthBetween(parent + 1, child - 1);
 	}
 
 	HierarchyIndex findValue(const ValueType& valueType, HierarchyIndex startingFrom = 0)

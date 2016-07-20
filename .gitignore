@@ -418,3 +418,4 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
+LinearHierarchy/output.csv
