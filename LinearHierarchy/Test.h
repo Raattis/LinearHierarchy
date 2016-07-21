@@ -15,16 +15,20 @@
 #include <inttypes.h>
 #include <time.h>
 #include <windows.h>
-//BOOL WINAPI QueryPerformanceCounter(_Out_ LARGE_INTEGER *lpPerformanceCount);
+#include "FastHash.h"
 
 typedef uint32_t SizeType;
 
 #ifdef _DEBUG
-const SizeType RoundNumber = 2;
+const SizeType RoundNumber = 100;
+const SizeType EraseNumber = 10;
+const SizeType AddNumber = 200;
+#elif defined(MAX_PERF)
+const SizeType RoundNumber = 10000;
 const SizeType EraseNumber = 20;
 const SizeType AddNumber = 400;
 #else
-const SizeType RoundNumber = 10000;
+const SizeType RoundNumber = 1000;
 const SizeType EraseNumber = 20;
 const SizeType AddNumber = 400;
 
@@ -35,16 +39,20 @@ const SizeType AddNumber = 400;
 
 #ifdef MAX_PERF
 	const bool VerbosePrinting = false;
+	const bool CheckHashes = false;
+	const bool CheckCounts = false;
 #else
 	const bool VerbosePrinting = false;
+	const bool CheckHashes = true;
+	const bool CheckCounts = true;
 #endif
 
 SizeType Rundi = 0;
 
 #if false
-#define FLAT_NO_CACHE_CONDITION     (Random::random % 3 == 0)
-#define FLAT_CACHE_CONDITION        (Random::random % 3 == 1)
-#define FLAT_CACHE_UNPREP_CONDITION (Random::random % 3 == 2)
+#define FLAT_NO_CACHE_CONDITION     (Random::random % 8 <= 3)
+#define FLAT_CACHE_CONDITION        (Random::random % 8 > 3 && Random::random % 8 <= 6)
+#define FLAT_CACHE_UNPREP_CONDITION (Random::random % 8 == 7)
 #elif false
 #define FLAT_NO_CACHE_CONDITION     (true)
 #define FLAT_CACHE_CONDITION        (false)
@@ -82,7 +90,7 @@ static_assert(sizeof(Handle) == 4, "Size of handle must be 4");
 
 struct HandleSorter
 {
-	static const bool UseSorting = false;
+	static const bool UseSorting = true;
 
 	inline static bool isFirst(const Handle& a, const Handle& b) { return a.number < b.number; }
 };
@@ -120,10 +128,39 @@ namespace // Logger
 	}
 }
 
+namespace
+{
+	const uint32_t HashBufferSize = 1024 * 32;
+	uint32_t HashBuffer[HashBufferSize];
+	uint32_t CountBuffer[HashBufferSize];
+	bool CheckingHashes = false;
+	SizeType CurrentHash = 0;
+	SizeType CurrentCounter = 0;
+
+	void setHash(uint32_t hash)
+	{
+		if (!CheckingHashes)
+			HashBuffer[CurrentHash++] = hash;
+		else
+			FLAT_ASSERT(HashBuffer[CurrentHash++] == hash);
+	}
+	void setCount(uint32_t count)
+	{
+		if (!CheckingHashes)
+			CountBuffer[CurrentCounter++] = count;
+		else
+			FLAT_ASSERT(CountBuffer[CurrentCounter++] == count);
+	}
+}
+
+
 SizeType MaxCount = 0;
 SizeType MaxDepth = 0;
+SizeType MaxTravelDepth = 0;
 double AverageCount = 0;
 double AverageDepth = 0;
+double AverageTravelDepth = 0;
+
 
 class ScopedProfiler
 {
@@ -176,11 +213,11 @@ struct Random
 		int r = rand();
 		random = *reinterpret_cast<uint32_t*>(&r);
 		uint32_t result = max <= min ? max : min + random % (max - min);
-		if (VerbosePrinting)
-		{
-			++counter;
-			printf("RandomRange. Counter: %u, Value: %u, Min: %u, Max: %u\n", counter, result, min, max);
-		}
+		++counter;
+		//if (VerbosePrinting)
+		//{
+		//	printf("RandomRange. Counter: %u, Value: %u, Min: %u, Max: %u\n", counter, result, min, max);
+		//}
 		return result;
 	}
 };
@@ -292,6 +329,11 @@ void FLAT_Test()
 	SizeType rootCount = 0;
 	SizeType moveCount = 0;
 
+	double cumulativeTravel = 0;
+	SizeType cumulativeTravelCount = 0;
+	SizeType cumulativeTravelDepth = 0;
+
+
 	LARGE_INTEGER li;
 	QueryPerformanceCounter(&li);
 
@@ -332,6 +374,15 @@ void FLAT_Test()
 				FLAT_ASSERT(!"ASDF!!! No condition matched");
 			}
 			++eraseCount;
+
+			if (CheckHashes && CurrentHash < HashBufferSize)
+			{
+				setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
+			}
+			if (CheckCounts && CurrentCounter < HashBufferSize)
+			{
+				setCount(l.getCount());
+			}
 		}
 
 		triesLeft = AddNumber;
@@ -342,7 +393,79 @@ void FLAT_Test()
 			char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
 			Handle handle = getHandle(name);
 
-			if (Random::get(0, 16) < 5 && COUNT > 3)
+			if (COUNT > 3 && Random::get(0, 16) < 3)
+			{
+				// travel to leaf
+
+				SizeType travelLoopCount = 0;
+				SizeType current = 0;
+				SizeType childCount = 0;
+
+				NextSiblingCache cache;
+				if (FLAT_CACHE_CONDITION)
+				{
+					cache.makeCacheValid(l);
+				}
+				
+				ScopedProfiler prof(&cumulativeTravel); ++cumulativeTravelCount;
+
+				if (FLAT_NO_CACHE_CONDITION)
+				{
+					childCount = countDirectChildren(l, current);
+				}
+				else if (FLAT_CACHE_CONDITION)
+				{
+					childCount = countDirectChildren(l, cache, current);
+				}
+				else if (FLAT_CACHE_UNPREP_CONDITION)
+				{
+					childCount = countDirectChildren(l, cache, current);
+				}
+				else
+				{
+					FLAT_ASSERT(!"No condition matched");
+				}
+
+
+				// Loop until in leaf
+				while (childCount > 0)
+				{
+					++travelLoopCount;
+					if (FLAT_NO_CACHE_CONDITION)
+					{
+						current = getNthChild(l, current, Random::get(0, childCount));
+						childCount = countDirectChildren(l, current);
+					}
+					else if (FLAT_CACHE_CONDITION)
+					{
+						current = getNthChild(l, cache, current, Random::get(0, childCount));
+						childCount = countDirectChildren(l, cache, current);
+					}
+					else if (FLAT_CACHE_UNPREP_CONDITION)
+					{
+						current = getNthChild(l, cache, current, Random::get(0, childCount));
+						childCount = countDirectChildren(l, cache, current);
+					}
+					else
+					{
+						FLAT_ASSERT(!"No condition matched");
+					}
+				}
+
+				if (MaxTravelDepth < travelLoopCount)
+					MaxTravelDepth = travelLoopCount;
+				cumulativeTravelDepth += travelLoopCount;
+				
+				if (CheckHashes && CurrentHash < HashBufferSize)
+				{
+					setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
+				}
+				if (CheckCounts && CurrentCounter < HashBufferSize)
+				{
+					setCount(l.getCount());
+				}
+			}
+			else if (COUNT > 3 && Random::get(0, 16) < 5)
 			{
 				SizeType parent = Random::get(1, COUNT - 2);
 				SizeType child = Random::get(parent + 2, COUNT);
@@ -383,6 +506,15 @@ void FLAT_Test()
 					{
 						FLAT_ASSERT(!"No condition matched");
 					}
+
+					if (CheckHashes && CurrentHash < HashBufferSize)
+					{
+						setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
+					}
+					if (CheckCounts && CurrentCounter < HashBufferSize)
+					{
+						setCount(l.getCount());
+					}
 				}
 
 				if (VerbosePrinting)
@@ -391,7 +523,7 @@ void FLAT_Test()
 				}
 				++moveCount;
 			}
-			else //if (!(handle.text[0] == 'R' && handle.text[1] == 'o'))
+			else
 			{
 				++addCount;
 				
@@ -427,6 +559,15 @@ void FLAT_Test()
 				else
 				{
 					FLAT_ASSERT(!"No condition matched.");
+				}
+
+				if (CheckHashes && CurrentHash < HashBufferSize)
+				{
+					setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
+				}
+				if (CheckCounts && CurrentCounter < HashBufferSize)
+				{
+					setCount(l.getCount());
 				}
 			}
 			//else
@@ -504,23 +645,17 @@ void FLAT_Test()
 		//	printf("buffers[%u].capacity = %u\n", i, cache.buffers[i].capacity);
 		//}
 		printf("average count: %.1lf, depth: %.1lf, max count: %d, depth: %d\n", cumulativeSize, cumulativeDepth, maxCount, maxDepth);
-
-		MaxCount = maxCount;
-		MaxDepth = maxDepth;
-		AverageCount = cumulativeSize;
-		AverageDepth = cumulativeDepth;
+		printf("average travel depth: %.1lf\n", double(cumulativeTravelDepth) / double(cumulativeTravelCount));
 
 		printf("\n\n\n");
-	}
 
-	// Print performance results
-	{
 		logTableDouble(cumulativeAdd / double(cumulativeAddCount));
 		logTableDouble(cumulativeMove / double(cumulativeMoveCount));
 		logTableDouble(cumulativeErase / double(cumulativeEraseCount));
 		logTableDouble(calculateDepthTime / double(calculateDepthTimeCount));
 		logTableDouble(calculateSizeTime / double(calculateSizeTimeCount));
 		logTableDouble(0.0);
+		logTableDouble(cumulativeTravel / double(cumulativeTravelCount));
 
 		printf("Average Add                   -\t%d\t-  %.4lf us\n", cumulativeAddCount, cumulativeAdd / double(cumulativeAddCount));
 		if(cumulativeAddRootCount) printf("Average AddRoot               -\t%d\t-  %.4lf us\n", cumulativeAddRootCount, cumulativeAddRoot / double(cumulativeAddRootCount));
@@ -529,6 +664,13 @@ void FLAT_Test()
 		printf("Average CalculateDepth        -\t%d\t-  %.4lf us\n", calculateDepthTimeCount, calculateDepthTime / double(calculateDepthTimeCount));
 		printf("Average CalculateSize         -\t%d\t-  %.4lf us\n", calculateSizeTimeCount, calculateSizeTime / double(calculateSizeTimeCount));
 		printf("Average Seek                  -\t%d\t-  %.4lf us\n", 0, 0.0);
+		printf("Average Travel                -\t%d\t-  %.4lf us\n", cumulativeTravelCount, cumulativeTravel / double(cumulativeTravelCount));
+		
+		MaxCount = maxCount;
+		MaxDepth = maxDepth;
+		AverageCount = cumulativeSize;
+		AverageDepth = cumulativeDepth;
+		AverageTravelDepth = double(cumulativeTravelDepth) / double(cumulativeTravelCount);
 
 		printf("\n");
 	}
@@ -628,16 +770,15 @@ void FLAT_Test()
 }
 
 
-template<typename Node>
-bool tryGetNthNode(const Node* root, Node*& result, SizeType n)
+bool tryGetNthNode(const RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType n)
 {
 	struct TEMP
 	{
-		static bool recurse(const Node* root, Node*& result, SizeType& n)
+		static bool recurse(const RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType& n)
 		{
 			if (n == 0)
 			{
-				result = const_cast<Node*>(root);
+				result = const_cast<RivalTreeNodeBase*>(root);
 				return true;
 			}
 			--n;
@@ -656,13 +797,10 @@ bool tryGetNthNode(const Node* root, Node*& result, SizeType n)
 	return success;
 }
 
-
-
-void RIVAL_Test()
+template<typename Tree>
+void Other_Tree_Test_Impl()
 {
-	typedef RivalTree<Handle, HandleSorter> Tree;
 	typedef Tree::Node Node;
-
 
 	struct PRINT
 	{
@@ -670,7 +808,7 @@ void RIVAL_Test()
 		{
 			struct Temp
 			{
-				static void recurse(const Node& node, SizeType& column, SizeType row = 0)
+				static void recurse(const RivalTreeNodeBase& node, SizeType& column, SizeType row = 0)
 				{
 					for (SizeType i = 1; i < row; i++)
 					{
@@ -691,7 +829,7 @@ void RIVAL_Test()
 
 					char buffer[5];
 					buffer[4] = '\0';
-					printf("%s\n", getName(node.value, buffer));
+					printf("%s\n", getName(((Node&)node).value, buffer));
 
 					++column;
 
@@ -714,12 +852,9 @@ void RIVAL_Test()
 #else
 	const bool enableSanityChecks = false;
 #endif
-	
+
 	Tree tree;
 	tree.root = tree.createNode(getHandle("Root"), NULL);
-
-	typedef FLAT_VECTOR<Node*> NodeVector;
-	const NodeVector& allNodes = tree.allNodes;
 
 	printf("Random seed: %u\n", Random::random);
 
@@ -747,6 +882,9 @@ void RIVAL_Test()
 	double cumulativeSeekTime = 0;
 	uint32_t cumulativeSeekTimeCount = 0;
 
+	double cumulativeTravel = 0;
+	SizeType cumulativeTravelCount = 0;
+	SizeType cumulativeTravelDepth = 0;
 
 
 	LARGE_INTEGER li;
@@ -754,10 +892,11 @@ void RIVAL_Test()
 
 	for (SizeType j = 0; j < RoundNumber; j++)
 	{
+		SizeType COUNT = count(tree.root);
+
 		SizeType triesLeft = EraseNumber;
-		while (--triesLeft > 2 && allNodes.getSize() > 50)
+		while (--triesLeft > 2 && COUNT > 50)
 		{
-			SizeType COUNT = allNodes.getSize();
 			SizeType child = Random::get(1, COUNT);
 
 			if (VerbosePrinting)
@@ -769,18 +908,20 @@ void RIVAL_Test()
 
 			{
 				ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-				bool success = tryGetNthNode(tree.root, node, child);
+				bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
 				FLAT_ASSERT(success);
 			}
-
 			FLAT_ASSERT(node != tree.root);
+
+
 			{
-				tree.isChildOf(node, tree.root);
+				isChildOf(node, tree.root);
 
 				ScopedProfiler p(&cumulativeErase); ++cumulativeEraseCount;
 				tree.eraseNode(node);
 			}
 
+			COUNT = count(tree.root);
 			++eraseCount;
 
 			if (enableSanityChecks)
@@ -790,11 +931,15 @@ void RIVAL_Test()
 					PRINT::print(tree);
 				}
 				tree.root->sanityCheck();
+			}
 
-				for (SizeType i = 1; i < allNodes.getSize(); i++)
-				{
-					FLAT_ASSERT(tree.isChildOf(allNodes[i], tree.root));
-				}
+			if (CheckCounts && CurrentCounter < HashBufferSize)
+			{
+				SizeType oldCount = COUNT;
+				COUNT = count(tree.root);
+				FLAT_ASSERT(oldCount == COUNT);
+
+				setCount(COUNT);
 			}
 		}
 
@@ -802,12 +947,37 @@ void RIVAL_Test()
 		triesLeft = AddNumber;
 		while (--triesLeft > 2)
 		{
-			SizeType COUNT = allNodes.getSize();
-
 			char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
 			Handle handle = getHandle(name);
 
-			if (Random::get(0, 16) < 5 && COUNT > 3)
+
+			if (COUNT > 3 && Random::get(0, 16) < 3)
+			{
+				// travel to leaf
+
+				ScopedProfiler prof(&cumulativeTravel); ++cumulativeTravelCount;
+
+				Node* currentNode = tree.root;
+
+				// Loop until in leaf
+				while (currentNode->children.getSize() > 0)
+				{
+					++cumulativeTravelDepth;
+
+					ScopedProfiler p(&cumulativeMove); ++cumulativeMoveCount;
+					currentNode = (Node*)currentNode->children[Random::get(0, currentNode->children.getSize())];
+				}
+
+				if (CheckCounts && CurrentCounter < HashBufferSize)
+				{
+					SizeType oldCount = COUNT;
+					COUNT = count(tree.root);
+					FLAT_ASSERT(oldCount == COUNT);
+
+					setCount(COUNT);
+				}
+			}
+			else if (COUNT > 3 && Random::get(0, 16) < 5)
 			{
 				SizeType parent = Random::get(1, COUNT - 2);
 				SizeType child = Random::get(parent + 2, COUNT);
@@ -818,25 +988,25 @@ void RIVAL_Test()
 					Node* parentNode = NULL;
 					{
 						ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-						bool success = tryGetNthNode(tree.root, node, child);
+						bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
 						FLAT_ASSERT(success);
 					}
 					{
 						ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-						bool success = tryGetNthNode(tree.root, parentNode, parent);
+						bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parent);
 						FLAT_ASSERT(success);
 					}
 
-					FLAT_ASSERT(child != 0 || tree.isChildOf(parentNode, node));
+					FLAT_ASSERT(child != 0 || isChildOf(parentNode, node));
 
-					if (tree.isChildOf(parentNode, node))
+					if (isChildOf(parentNode, node))
 					{
 						Node* temp = node;
 						node = parentNode;
 						parentNode = temp;
 					}
 
-					FLAT_ASSERT(!tree.isChildOf(parentNode, node));
+					FLAT_ASSERT(!isChildOf(parentNode, node));
 
 					if (VerbosePrinting)
 					{
@@ -852,7 +1022,7 @@ void RIVAL_Test()
 						tree.makeChildOf(node, parentNode);
 					}
 
-					FLAT_ASSERT(!tree.isChildOf(parentNode, node));
+					FLAT_ASSERT(!isChildOf(parentNode, node));
 
 
 					if (VerbosePrinting)
@@ -861,11 +1031,16 @@ void RIVAL_Test()
 					}
 					if (enableSanityChecks)
 					{
-						for (SizeType i = 1; i < allNodes.getSize(); i++)
-						{
-							FLAT_ASSERT(tree.isChildOf(allNodes[i], tree.root));
-						}
 						tree.root->sanityCheck();
+					}
+
+					if (CheckCounts && CurrentCounter < HashBufferSize)
+					{
+						SizeType oldCount = COUNT;
+						COUNT = count(tree.root);
+						FLAT_ASSERT(oldCount == COUNT);
+
+						setCount(COUNT);
 					}
 				}
 
@@ -873,17 +1048,16 @@ void RIVAL_Test()
 			}
 			else
 			{
-				++addCount;
 
 				SizeType parent = Random::get(0, COUNT);
 
 				Node* parentNode = NULL;
 				{
 					ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-					bool success = tryGetNthNode(tree.root, parentNode, parent);
+					bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parent);
 					FLAT_ASSERT(success);
 				}
-				FLAT_ASSERT(parent == 0 || tree.isChildOf(parentNode, tree.root));
+				FLAT_ASSERT(parent == 0 || isChildOf(parentNode, tree.root));
 
 				if (VerbosePrinting)
 				{
@@ -897,7 +1071,10 @@ void RIVAL_Test()
 					ScopedProfiler p(&cumulativeAdd); ++cumulativeAddCount;
 					node = tree.createNode(handle, parentNode);
 				}
-				FLAT_ASSERT(tree.isChildOf(node, tree.root));
+				FLAT_ASSERT(isChildOf(node, tree.root));
+
+				++addCount;
+				++COUNT;
 
 				if (enableSanityChecks)
 				{
@@ -905,59 +1082,38 @@ void RIVAL_Test()
 					{
 						PRINT::print(tree);
 					}
-					for (SizeType i = 1; i < allNodes.getSize(); i++)
-					{
-						FLAT_ASSERT(tree.isChildOf(allNodes[i], tree.root));
-					}
 					tree.root->sanityCheck();
+				}
+
+				if (CheckCounts && CurrentCounter < HashBufferSize)
+				{
+					SizeType oldCount = COUNT;
+					COUNT = count(tree.root);
+					FLAT_ASSERT(oldCount == COUNT);
+
+					setCount(COUNT);
 				}
 			}
 		}
 
-		struct Temp
-		{
-			static SizeType count(const Node* node)
-			{
-				SizeType result = 1;
-				for (SizeType i = 0; i < node->children.getSize(); i++)
-				{
-					if (node->value.number != 0)
-						result += count(node->children[i]);
-				}
-				return result;
-			}
-
-			static SizeType depth(const Node* node)
-			{
-				SizeType maxDepth = 0;
-				for (SizeType i = 0; i < node->children.getSize(); i++)
-				{
-					SizeType d = depth(node->children[i]) + 1;
-					if (d > maxDepth)
-						maxDepth = d;
-				}
-				return maxDepth;
-			}
-		};
-
-		SizeType count = 0;
-		SizeType depth = 0;
+		SizeType currentCount = 0;
+		SizeType currentDepth = 0;
 
 		{
 			ScopedProfiler prof(&calculateSizeTime); ++calculateSizeTimeCount;
-			count = Temp::count(tree.root);
+			currentCount = count(tree.root);
 		}
 
 		{
 			ScopedProfiler prof(&calculateDepthTime); ++calculateDepthTimeCount;
-			depth = Temp::depth(tree.root);
+			currentDepth = depth(tree.root);
 		}
 
-		cumulativeSize += count / double(RoundNumber);
-		cumulativeDepth += depth / double(RoundNumber);
+		cumulativeSize += currentCount / double(RoundNumber);
+		cumulativeDepth += currentDepth / double(RoundNumber);
 
-		maxCount = (maxCount < count ? count : maxCount);
-		maxDepth = (maxDepth < depth ? depth : maxDepth);
+		maxCount = (maxCount < currentCount ? currentCount : maxCount);
+		maxDepth = (maxDepth < currentDepth ? currentDepth : maxDepth);
 	}
 
 	LARGE_INTEGER li2;
@@ -978,6 +1134,7 @@ void RIVAL_Test()
 
 		printf("%.4lf s, seek: %.3lf s, adds: %d, erases: %d, moves: %d \n", diff, cumulativeSeekTime / PCFreq, addCount, eraseCount, moveCount);
 		printf("average count: %.1lf, depth: %.1lf, max count: %d, depth: %d\n", cumulativeSize, cumulativeDepth, maxCount, maxDepth);
+		printf("average travel depth: %.1lf\n", double(cumulativeTravelDepth) / double(cumulativeTravelCount));
 
 		printf("\n\n\n");
 
@@ -987,6 +1144,7 @@ void RIVAL_Test()
 		logTableDouble(calculateDepthTime / double(calculateDepthTimeCount));
 		logTableDouble(calculateSizeTime / double(calculateSizeTimeCount));
 		logTableDouble(cumulativeSeekTime / double(cumulativeSeekTimeCount));
+		logTableDouble(cumulativeTravel / double(cumulativeTravelCount));
 
 		printf("Average Add                   -\t%d\t-  %.4lf us\n", cumulativeAddCount, cumulativeAdd / double(cumulativeAddCount));
 		printf("Average Move                  -\t%d\t-  %.4lf us\n", cumulativeMoveCount, cumulativeMove / double(cumulativeMoveCount));
@@ -994,362 +1152,26 @@ void RIVAL_Test()
 		printf("Average CalculateDepth        -\t%d\t-  %.4lf us\n", calculateDepthTimeCount, calculateDepthTime / double(calculateDepthTimeCount));
 		printf("Average CalculateSize         -\t%d\t-  %.4lf us\n", calculateSizeTimeCount, calculateSizeTime / double(calculateSizeTimeCount));
 		printf("Average Seek                  -\t%d\t-  %.4lf us\n", cumulativeSeekTimeCount, cumulativeSeekTime / double(cumulativeSeekTimeCount));
-
-		printf("\n");
+		printf("Average Travel                -\t%d\t-  %.4lf us\n", cumulativeTravelCount, cumulativeTravel / double(cumulativeTravelCount));
 
 		MaxCount = maxCount;
 		MaxDepth = maxDepth;
 		AverageCount = cumulativeSize;
 		AverageDepth = cumulativeDepth;
+		AverageTravelDepth = double(cumulativeTravelDepth) / double(cumulativeTravelCount);
 
+		printf("\n");
 	}
+}
+
+void RIVAL_Test()
+{
+	Other_Tree_Test_Impl<RivalTree<Handle, HandleSorter> >();
 }
 
 void NAIVE_Test()
 {
-	typedef NaiveTree<Handle, HandleSorter> Tree;
-	typedef Tree::Node Node;
-
-	struct PRINT
-	{
-		static void print(const Tree& tree)
-		{
-			struct Temp
-			{
-				static void recurse(const Node& node, SizeType& column, SizeType row = 0)
-				{
-					for (SizeType i = 1; i < row; i++)
-					{
-						printf("  ");
-					}
-					if (row > 0)
-					{
-						if (node.rightSibling) // Next sibling exists
-						{
-							printf("„¥");
-						}
-						else
-						{
-							printf("„¤");
-						}
-					}
-
-
-					char buffer[5];
-					buffer[4] = '\0';
-					printf("%s\n", node.toString().ptr);
-
-					++column;
-
-					for (SizeType i = 0; i < node.children.getSize(); i++)
-					{
-						recurse(*node.children[i], column, row + 1);
-					}
-				}
-
-			};
-
-			SizeType col = 0;
-			Temp::recurse(*tree.root, col);
-			printf("\n");
-		}
-	};
-
-#ifdef MAX_PERF
-	const bool enableSanityChecks = false;
-#else
-	const bool enableSanityChecks = false;
-#endif
-
-	typedef FLAT_VECTOR<Node*> NodeVector;
-	NodeVector allNodes;
-	allNodes.reserve(16000);
-
-	Tree tree;
-	tree.root = tree.createNode(getHandle("Root"), NULL);
-	allNodes.pushBack(tree.root);
-
-	printf("Random seed: %u\n", Random::random);
-
-	double cumulativeAdd = 0.0f;
-	double cumulativeMove = 0.0f;
-	double cumulativeErase = 0.0f;
-	uint32_t cumulativeAddCount = 0;
-	uint32_t cumulativeMoveCount = 0;
-	uint32_t cumulativeEraseCount = 0;
-
-	double calculateSizeTime = 0;
-	double calculateDepthTime = 0;
-	uint32_t calculateSizeTimeCount = 0;
-	uint32_t calculateDepthTimeCount = 0;
-
-	double cumulativeSeekTime = 0;
-	uint32_t cumulativeSeekTimeCount = 0;
-
-	SizeType eraseCount = 0;
-	SizeType addCount = 0;
-	SizeType moveCount = 0;
-
-	double cumulativeSize = 0;
-	double cumulativeDepth = 0;
-	SizeType maxCount = 0;
-	SizeType maxDepth = 0;
-
-
-
-	LARGE_INTEGER li;
-	QueryPerformanceCounter(&li);
-
-	for (SizeType j = 0; j < RoundNumber; j++)
-	{
-		SizeType triesLeft = EraseNumber;
-		while (--triesLeft > 2 && allNodes.getSize() > 50)
-		{
-			SizeType COUNT = allNodes.getSize();
-			SizeType child = Random::get(1, COUNT);
-
-			Node* node = NULL;
-			{
-				ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-				bool success = tryGetNthNode(tree.root, node, child);
-				FLAT_ASSERT(success);
-				FLAT_ASSERT(node);
-			}
-
-			struct Temp
-			{
-				static void recursiveErase(NodeVector& allNodes, Node* node)
-				{
-					FLAT_ASSERT(node);
-					for (SizeType i = 0; i < allNodes.getSize(); i++)
-					{
-						if (allNodes[i] == node)
-						{
-							allNodes[i] = allNodes.getBack();
-							allNodes.resize(allNodes.getSize() - 1);
-							break;
-						}
-					}
-
-					for (SizeType i = 0; i < node->children.getSize(); i++)
-					{
-						recursiveErase(allNodes, node->children[i]);
-					}
-				}
-			};
-
-			Temp::recursiveErase(allNodes, node);
-
-			{
-				ScopedProfiler p(&cumulativeErase); ++cumulativeEraseCount;
-				tree.eraseNode(node);
-			}
-
-			++eraseCount;
-
-			if (VerbosePrinting)
-			{
-				printf("Erase: %d\n", child);
-			}
-			if (enableSanityChecks)
-			{
-				if (VerbosePrinting)
-				{
-					PRINT::print(tree);
-				}
-				tree.root->sanityCheck();
-			}
-		}
-
-		triesLeft = AddNumber;
-		while (--triesLeft > 2)
-		{
-			SizeType COUNT = allNodes.getSize();
-
-			char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
-			Handle handle = getHandle(name);
-
-			if (Random::get(0, 16) < 5 && COUNT > 3)
-			{
-				SizeType parent = Random::get(1, COUNT - 2);
-				SizeType child = Random::get(parent + 2, COUNT);
-				FLAT_ASSERT(parent < child);
-
-				{
-					Node* node = NULL;
-					Node* parentNode = NULL;
-					{
-						ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-						bool success = tryGetNthNode(tree.root, node, child);
-						FLAT_ASSERT(success);
-					}
-					{
-						ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-						bool success = tryGetNthNode(tree.root, parentNode, parent);
-						FLAT_ASSERT(success);
-					}
-
-					if (tree.isChildOf(parentNode, node))
-					{
-						Node* temp = node;
-						node = parentNode;
-						parentNode = temp;
-					}
-
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-						char buffer[5]; buffer[4] = '\0';
-						char buffer2[5]; buffer2[4] = '\0';
-						printf("Make #%d \"%s\" into #%d \"%s\"'s child\n", child, getName(node->value, buffer), parent, getName(parentNode->value, buffer2));
-					}
-
-					{
-						ScopedProfiler p(&cumulativeMove); ++cumulativeMoveCount;
-						tree.makeChildOf(node, parentNode);
-					}
-
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-					}
-					if (enableSanityChecks)
-					{
-						tree.root->sanityCheck();
-					}
-				}
-				++moveCount;
-			}
-			else
-			{
-				++addCount;
-
-				SizeType parent = Random::get(0, COUNT);
-
-				Node* parentNode = NULL;
-
-				{
-					ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
-					bool success = tryGetNthNode(tree.root, parentNode, parent);
-					FLAT_ASSERT(success);
-				}
-
-				if (VerbosePrinting)
-				{
-					char buffer[5]; buffer[4] = '\0';
-					char buffer2[5]; buffer2[4] = '\0';
-					printf("Add %s to #%d \"%s\"\n", getName(handle, buffer), parent, getName(parentNode->value, buffer2));
-				}
-
-				Node* node = NULL;
-				{
-					ScopedProfiler p(&cumulativeAdd); ++cumulativeAddCount;
-					node = tree.createNode(handle, parentNode);
-				}
-
-				allNodes.pushBack(node);
-
-				if (enableSanityChecks)
-				{
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-					}
-					tree.root->sanityCheck();
-				}
-			}
-		}
-
-		struct Temp
-		{
-			static SizeType count(const Node* node)
-			{
-				SizeType result = 1;
-				for (SizeType i = 0; i < node->children.getSize(); i++)
-				{
-					if (node->value.number != 0)
-						result += count(node->children[i]);
-				}
-				return result;
-			}
-
-			static SizeType depth(const Node* node)
-			{
-				SizeType maxDepth = 0;
-				for (SizeType i = 0; i < node->children.getSize(); i++)
-				{
-					SizeType d = depth(node->children[i]) + 1;
-					if (d > maxDepth)
-						maxDepth = d;
-				}
-				return maxDepth;
-			}
-		};
-
-		SizeType count = 0;
-		SizeType depth = 0;
-
-		{
-			ScopedProfiler prof(&calculateSizeTime); ++calculateSizeTimeCount;
-			count = Temp::count(tree.root);
-		}
-
-		{
-			ScopedProfiler prof(&calculateDepthTime); ++calculateDepthTimeCount;
-			depth = Temp::depth(tree.root);
-		}
-
-		cumulativeSize += count / double(RoundNumber);
-		cumulativeDepth += depth / double(RoundNumber);
-
-		maxCount = (maxCount < count ? count : maxCount);
-		maxDepth = (maxDepth < depth ? depth : maxDepth);
-	}
-
-	LARGE_INTEGER li2;
-	QueryPerformanceCounter(&li2);
-
-	if (VerbosePrinting)
-	{
-		PRINT::print(tree);
-	}
-
-	// Print performance results
-	{
-		LARGE_INTEGER freq;
-		QueryPerformanceFrequency(&freq);
-
-		double PCFreq = double(freq.QuadPart) / 1.0;
-		double diff = double(li2.QuadPart - li.QuadPart) / PCFreq;
-
-		printf("%.4lf s, seek: %.3lf s, adds: %d, erases: %d, moves: %d \n", diff, cumulativeSeekTime / PCFreq, addCount, eraseCount, moveCount);
-		printf("average count: %.1lf, depth: %.1lf, max count: %d, depth: %d\n", cumulativeSize, cumulativeDepth, maxCount, maxDepth);
-
-		printf("\n\n\n");
-
-		logTableDouble(cumulativeAdd / double(cumulativeAddCount));
-		logTableDouble(cumulativeMove / double(cumulativeMoveCount));
-		logTableDouble(cumulativeErase / double(cumulativeEraseCount));
-		logTableDouble(calculateDepthTime / double(calculateDepthTimeCount));
-		logTableDouble(calculateSizeTime / double(calculateSizeTimeCount));
-		logTableDouble(cumulativeSeekTime / double(cumulativeSeekTimeCount));
-
-		printf("Average Add                   -\t%d\t-  %.4lf us\n", cumulativeAddCount, cumulativeAdd / double(cumulativeAddCount));
-		printf("Average Move                  -\t%d\t-  %.4lf us\n", cumulativeMoveCount, cumulativeMove / double(cumulativeMoveCount));
-		printf("Average Erase                 -\t%d\t-  %.4lf us\n", cumulativeEraseCount, cumulativeErase / double(cumulativeEraseCount));
-
-		printf("Average CalculateDepth        -\t%d\t-  %.4lf us\n", calculateDepthTimeCount, calculateDepthTime / double(calculateDepthTimeCount));
-		printf("Average CalculateSize         -\t%d\t-  %.4lf us\n", calculateSizeTimeCount, calculateSizeTime / double(calculateSizeTimeCount));
-		printf("Average Seek                  -\t%d\t-  %.4lf us\n", cumulativeSeekTimeCount, cumulativeSeekTime / double(cumulativeSeekTimeCount));
-
-		MaxCount = maxCount;
-		MaxDepth = maxDepth;
-		AverageCount = cumulativeSize;
-		AverageDepth = cumulativeDepth;
-
-		printf("\n");
-
-	}
+	Other_Tree_Test_Impl<NaiveTree<Handle, HandleSorter> >();
 }
 
 
@@ -1368,9 +1190,10 @@ void test()
 		logTable("Add\t");
 		logTable("Move\t");
 		logTable("Remove\t");
-		logTable("Depth\t");
+		logTable("Depth max\t");
 		logTable("Count\t");
-		logTable("Seek\t");
+		logTable("Nth node\t");
+		logTable("Leaf travel\t");
 	}
 
 	enum
@@ -1386,8 +1209,8 @@ void test()
 	const uint32_t TestMask
 		=
 		Flat1 |
-		Flat2 |
-		Flat3 |
+		//Flat2 |
+		//Flat3 |
 		Rival |
 		Naive |
 		Every |
@@ -1402,6 +1225,9 @@ void test()
 		printf("\nFlat Tree\n");
 		Random::init(seed);
 		FLAT_Test();
+		CheckingHashes = true;
+		CurrentHash = 0;
+		CurrentCounter = 0;
 	}
 
 	// Hot cache
@@ -1413,6 +1239,9 @@ void test()
 		printf("\nFlat Tree Cached\n");
 		Random::init(seed);
 		FLAT_Test();
+		CheckingHashes = true;
+		CurrentHash = 0;
+		CurrentCounter = 0;
 	}
 
 	// Cold cache
@@ -1424,6 +1253,9 @@ void test()
 		printf("\nFlat Tree With Cold Cache\n");
 		Random::init(seed);
 		FLAT_Test();
+		CheckingHashes = true;
+		CurrentHash = 0;
+		CurrentCounter = 0;
 	}
 
 	// Naive tree
@@ -1433,6 +1265,9 @@ void test()
 		printf("\nNaive Tree\n");
 		Random::init(seed);
 		NAIVE_Test();
+		CheckingHashes = true;
+		CurrentHash = 0;
+		CurrentCounter = 0;
 	}
 
 	// Rival tree
@@ -1442,8 +1277,10 @@ void test()
 		printf("\nBuffered Tree\n");
 		Random::init(seed);
 		RIVAL_Test();
+		CheckingHashes = true;
+		CurrentHash = 0;
+		CurrentCounter = 0;
 	}
-
 
 	logTable("\n\nMax Count\t");
 	logTableDouble(double(MaxCount));
@@ -1453,6 +1290,10 @@ void test()
 	logTableDouble(double(MaxDepth));
 	logTable("\nAverage Depth\t");
 	logTableDouble(double(AverageDepth));
+	logTable("\nMax Travel Depth\t");
+	logTableDouble(double(MaxTravelDepth));
+	logTable("\nAverage Travel Depth\t");
+	logTableDouble(double(AverageTravelDepth));
 
 	logTableEnd();
 
@@ -1465,11 +1306,15 @@ void test()
 	}
 	printf("%s\n", LogBuffer);
 
-	FILE* f = NULL;
-	errno_t err = fopen_s(&f, "output.csv", "w");
-	FLAT_ASSERT(err >= 0);
-	fprintf(f, "%s", LogBuffer);
-	fclose(f);
+#ifdef MAX_PERF
+	{
+		FILE* f = NULL;
+		errno_t err = fopen_s(&f, "output.csv", "w");
+		FLAT_ASSERT(err >= 0);
+		fprintf(f, "%s", LogBuffer);
+		fclose(f);
+	}
+#endif
 
 	system("pause");
 }

@@ -286,7 +286,7 @@ public:
 		return row(parentDepth).column(child);
 	}
 	void makeCacheValid(const FlatHierarchyBase& hierarchy, RowIndex maxDepth = 0)
-	{
+	{	
 		if (maxDepth == 0)
 			maxDepth = hierarchy.findMaxDepth();
 
@@ -366,7 +366,7 @@ struct ArrayCache
 	{
 	}
 
-	CacheValue operator[] (HierarchyIndex index)
+	CacheValue operator[] (HierarchyIndex index) const
 	{
 		FLAT_ASSERT(cacheIsValid);
 		FLAT_ASSERT(index < cacheValues.getSize());
@@ -400,20 +400,42 @@ struct NextSiblingCache : public ArrayCache
 
 		cacheValues.resize(h.getCount());
 
+		if (h.getCount() == 0)
+			return;
+
+		const HierarchyIndex lastIndex = h.getCount() - 1;
+		cacheValues[lastIndex] = FlatHierarchyBase::getIndexNotFound();
+
 		const SizeType BufferCapacity = (4096 / sizeof(HierarchyIndex)) < 1 ? 1 : 4096 / sizeof(HierarchyIndex);
 		for (SizeType currentDepth = 0; currentDepth <= maxDepth; currentDepth += BufferCapacity)
 		{
 			HierarchyIndex buffer[BufferCapacity];
-			FLAT_MEMSET(buffer, FlatHierarchyBase::getIndexNotFound(), sizeof(HierarchyIndex) * BufferCapacity);
+			for (HierarchyIndex i = 0, end = BufferCapacity; i < end; i++)
+			{
+				buffer[i] = FlatHierarchyBase::getIndexNotFound();
+			}
 
-			for (HierarchyIndex i = h.getCount(); i-- > 0; )
+			SizeType previousDepthValue = h.depths[lastIndex];
+			buffer[previousDepthValue - currentDepth] = lastIndex;
+
+			for (HierarchyIndex i = lastIndex; i-- > 0; )
 			{
 				SizeType d = (SizeType)(h.depths[i]);
 				if (d - currentDepth < BufferCapacity)
 				{
+					FLAT_ASSERT(d + 1 >= previousDepthValue);
 					cacheValues[i] = buffer[d - currentDepth];
 					buffer[d - currentDepth] = i;
+
+					if (d < previousDepthValue) // Depth decreases
+					{
+						FLAT_ASSERT(d + 1 == previousDepthValue && "Depth should never decrease by more than 1 when iterating backwards.");
+						buffer[previousDepthValue - currentDepth] = FlatHierarchyBase::getIndexNotFound();
+					}
 				}
+
+				previousDepthValue = d;
+
 				if (maxDepth < d)
 					maxDepth = d;
 			}
@@ -559,18 +581,19 @@ FlatHierarchyBase::HierarchyIndex makeChildOf(FlatHierarchy<ValueType, Sorter>& 
 	{
 		if (child > parent)
 		{
-			// If child's index is greater than parent, find a place in parents children that is closest to child's current position
-			FlatHierarchyBase::DepthValue targetDepth = h.depths[parent] + 1;
-
-			for (FlatHierarchyBase::HierarchyIndex currentPlace = parent + 1
-				; currentPlace < child
-				; currentPlace = descendantCache.getLastDescendant(h, currentPlace) + 1)
-			{
-				FLAT_ASSERT(h.depths[currentPlace] <= targetDepth);
-				if (h.depths[currentPlace] < targetDepth)
-					break;
-				dest = currentPlace;
-			}
+			// Commented to unify behavior with pointer trees
+			//// If child's index is greater than parent, find a place in parents children that is closest to child's current position
+			//FlatHierarchyBase::DepthValue targetDepth = h.depths[parent] + 1;
+			//
+			//for (FlatHierarchyBase::HierarchyIndex currentPlace = parent + 1
+			//	; currentPlace < child
+			//	; currentPlace = descendantCache.getLastDescendant(h, currentPlace) + 1)
+			//{
+			//	FLAT_ASSERT(h.depths[currentPlace] <= targetDepth);
+			//	if (h.depths[currentPlace] < targetDepth)
+			//		break;
+			//	dest = currentPlace;
+			//}
 		}
 	}
 
@@ -740,6 +763,98 @@ FlatHierarchyBase::HierarchyIndex createRootNode(FlatHierarchy<ValueType, Sorter
 	descendantCache.cacheIsValid = false;
 
 	return newIndex;
+}
+
+
+FlatHierarchyBase::HierarchyIndex countDirectChildren(const FlatHierarchyBase& h, NextSiblingCache& siblingCache, FlatHierarchyBase::HierarchyIndex parent)
+{
+	SizeType result = 0;
+	if (parent + 1 >= h.getCount() || h.depths[parent] + 1 != h.depths[parent + 1])
+		return result;
+	++result;
+
+	FlatHierarchyBase::HierarchyIndex current = siblingCache.getNextSibling(h, parent + 1);
+
+	while (current < h.getCount())
+	{
+#ifndef MAX_PERF // Asserts are disabled on MAX_PERF
+		SizeType old = current;
+#endif
+		++result;
+		current = siblingCache.getNextSibling(current);
+
+		FLAT_ASSERT(old < current);
+		FLAT_ASSERT(result < h.getCount());
+	}
+
+	return result;
+}
+
+FlatHierarchyBase::HierarchyIndex getNthChild(const FlatHierarchyBase& h, NextSiblingCache& siblingCache, FlatHierarchyBase::HierarchyIndex parent, SizeType n)
+{
+	FlatHierarchyBase::HierarchyIndex current = parent + 1;
+	FLAT_ASSERT(current < h.getCount() && h.depths[parent] + 1 == h.depths[current]);
+
+	if (n-- == 0)
+		return current;
+
+	// Only now refresh cache if needed
+	current = siblingCache.getNextSibling(h, current);
+	FLAT_ASSERT(current < h.getCount() && h.depths[parent] + 1 == h.depths[current]);
+
+	while (n-- > 0)
+	{
+#ifndef MAX_PERF // Asserts are disabled on MAX_PERF
+		SizeType old = current;
+#endif
+		current = siblingCache.getNextSibling(current);
+		FLAT_ASSERT(old < current);
+		FLAT_ASSERT(current < h.getCount() && h.depths[parent] + 1 == h.depths[current]);
+	}
+
+	return current;
+}
+
+
+FlatHierarchyBase::HierarchyIndex countDirectChildren(const FlatHierarchyBase& h, FlatHierarchyBase::HierarchyIndex parent)
+{
+	FLAT_ASSERT(parent < h.getCount());
+
+	SizeType result = 0;
+	
+	const FlatHierarchyBase::DepthValue targetDepth = h.depths[parent] + 1;
+	FlatHierarchyBase::HierarchyIndex current = parent + 1;
+
+	while (current < h.getCount() && targetDepth <= h.depths[current])
+	{
+		if (targetDepth == h.depths[current])
+			++result;
+		++current;
+	}
+
+	return result;
+}
+
+FlatHierarchyBase::HierarchyIndex getNthChild(const FlatHierarchyBase& h, FlatHierarchyBase::HierarchyIndex parent, SizeType n)
+{
+	FLAT_ASSERT(parent < h.getCount());
+
+	const FlatHierarchyBase::DepthValue targetDepth = h.depths[parent] + 1;
+	FlatHierarchyBase::HierarchyIndex current = parent + 1;
+
+	FLAT_ASSERT(current < h.getCount() && targetDepth == h.depths[current]);
+
+	while (n > 0)
+	{
+		++current;
+		if (targetDepth == h.depths[current])
+		{
+			--n;
+		}
+		FLAT_ASSERT(current < h.getCount() && targetDepth <= h.depths[current]);
+	}
+
+	return current;
 }
 
 #endif
