@@ -280,7 +280,7 @@ public:
 		FLAT_ASSERT(parent <= child || (child - parent) == row(parentDepth).column(child));
 		return (child - parent) == row(parentDepth).column(child);
 	}
-	inline bool getParentIndex(RowIndex parentDepth, ColumnIndex child) const
+	inline RowIndex getParentIndex(RowIndex parentDepth, ColumnIndex child) const
 	{
 		FLAT_ASSERT(cacheIsValid);
 		return row(parentDepth).column(child);

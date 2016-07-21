@@ -27,15 +27,15 @@
 	{
 	public:
 		void pushBack(const ValueType& v) { push_back(v); }
-		size_t getSize() const { return size(); }
-		void insert(size_t index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
+		SizeType getSize() const { return (SizeType)size(); }
+		void insert(SizeType index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
 		const ValueType& getBack() const { return back(); }
 		ValueType& getBack() { return back(); }
-		size_t getCapacity() const { return capacity(); }
-		void zero(size_t start, size_t end) { return std::fill(begin() + start, begin() + end, 0); }
+		SizeType getCapacity() const { return capacity(); }
+		void zero(SizeType start, SizeType end) { return std::fill(begin() + start, begin() + end, 0); }
 		ValueType* getPointer() { return &*begin(); }
 		const ValueType* getPointer() const { return &*begin(); }
-		void erase(size_t index) { std::vector<ValueType>::erase(begin() + index); }
+		void erase(SizeType index) { std::vector<ValueType>::erase(begin() + index); }
 	};
 	
 	#define FLAT_VECTOR FLAT_Vector_Type

@@ -15,17 +15,23 @@
 #include <inttypes.h>
 #include <time.h>
 #include <windows.h>
-BOOL WINAPI QueryPerformanceCounter(_Out_ LARGE_INTEGER *lpPerformanceCount);
+//BOOL WINAPI QueryPerformanceCounter(_Out_ LARGE_INTEGER *lpPerformanceCount);
 
 typedef uint32_t SizeType;
 
+#ifdef _DEBUG
+const SizeType RoundNumber = 2;
+const SizeType EraseNumber = 20;
+const SizeType AddNumber = 400;
+#else
 const SizeType RoundNumber = 10000;
 const SizeType EraseNumber = 20;
 const SizeType AddNumber = 400;
 
-//const SizeType RoundNumber = 1;
-//const SizeType EraseNumber = 2;
-//const SizeType AddNumber = 15;
+//const SizeType RoundNumber = 100;
+//const SizeType EraseNumber = 20;
+//const SizeType AddNumber = 400;
+#endif
 
 #ifdef MAX_PERF
 	const bool VerbosePrinting = false;
@@ -49,7 +55,6 @@ SizeType Rundi = 0;
 #define FLAT_CACHE_UNPREP_CONDITION (Rundi == 2)
 #endif
 
-
 struct Handle
 {
 	union {
@@ -64,6 +69,13 @@ struct Handle
 	bool operator<(const Handle& other)
 	{
 		return number < other.number;
+	}
+
+	String toString() const
+	{
+		if (!this)
+			return String("NULL", 4);
+		return String(text, 4);
 	}
 };
 static_assert(sizeof(Handle) == 4, "Size of handle must be 4");
@@ -91,7 +103,7 @@ namespace // Logger
 	SizeType LogBufferProgress = 0;
 	void logTable(const char* msg)
 	{
-		SizeType l = strlen(msg);
+		SizeType l = (SizeType)strlen(msg);
 		memcpy(LogBuffer + LogBufferProgress, msg, l);
 		LogBufferProgress += l;
 	}
@@ -102,7 +114,8 @@ namespace // Logger
 	void logTableDouble(double value)
 	{
 		char buffer[128];
-		sprintf(buffer, "%.4lf\t", value);
+		errno_t err = sprintf_s(buffer, "%.4lf\t", value);
+		FLAT_ASSERT(err >= 0);
 		logTable(buffer);
 	}
 }
@@ -163,9 +176,11 @@ struct Random
 		int r = rand();
 		random = *reinterpret_cast<uint32_t*>(&r);
 		uint32_t result = max <= min ? max : min + random % (max - min);
-		++counter;
-		if(VerbosePrinting)
-			printf("RandomRange. Counter: %u, Value: %u\n", counter, result);
+		if (VerbosePrinting)
+		{
+			++counter;
+			printf("RandomRange. Counter: %u, Value: %u, Min: %u, Max: %u\n", counter, result, min, max);
+		}
 		return result;
 	}
 };
@@ -178,7 +193,7 @@ void FLAT_Test()
 
 	struct PRINT
 	{
-		static void PRINT::print(const HierarchyType& l)
+		static void print(const HierarchyType& l)
 		{
 			printf("\n");
 			for (SizeType c = 0; c < l.getCount(); c++)
@@ -324,13 +339,13 @@ void FLAT_Test()
 		{
 			SizeType COUNT = l.getCount();
 
-			char name[4] = { 'A' + Random::get(0,26), 'a' + Random::get(0,26), 'a' + Random::get(0,26), 'a' + Random::get(0,26) };
+			char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
 			Handle handle = getHandle(name);
 
-			if (Random::get(0, 16) < 5 && COUNT > 2)
+			if (Random::get(0, 16) < 5 && COUNT > 3)
 			{
-				SizeType parent = Random::get(1, COUNT - 1);
-				SizeType child = Random::get(parent + 1, COUNT);
+				SizeType parent = Random::get(1, COUNT - 2);
+				SizeType child = Random::get(parent + 2, COUNT);
 				FLAT_ASSERT(parent < child);
 
 				if (VerbosePrinting)
@@ -651,7 +666,7 @@ void RIVAL_Test()
 
 	struct PRINT
 	{
-		static void PRINT::print(const Tree& tree)
+		static void print(const Tree& tree)
 		{
 			struct Temp
 			{
@@ -663,7 +678,7 @@ void RIVAL_Test()
 					}
 					if (row > 0)
 					{
-						if (node.leftSibling)
+						if (node.rightSibling) // Next sibling exists
 						{
 							printf("„¥");
 						}
@@ -789,15 +804,14 @@ void RIVAL_Test()
 		{
 			SizeType COUNT = allNodes.getSize();
 
-			char name[4] = { 'A' + Random::get(0,26), 'a' + Random::get(0,26), 'a' + Random::get(0,26), 'a' + Random::get(0,26) };
+			char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
 			Handle handle = getHandle(name);
 
-			if (Random::get(0, 16) < 5 && COUNT > 2)
+			if (Random::get(0, 16) < 5 && COUNT > 3)
 			{
-				SizeType parent = Random::get(1, COUNT - 1);
-				SizeType child = Random::get(parent + 1, COUNT);
+				SizeType parent = Random::get(1, COUNT - 2);
+				SizeType child = Random::get(parent + 2, COUNT);
 				FLAT_ASSERT(parent < child);
-
 
 				{
 					Node* node = NULL;
@@ -998,7 +1012,7 @@ void NAIVE_Test()
 
 	struct PRINT
 	{
-		static void PRINT::print(const Tree& tree)
+		static void print(const Tree& tree)
 		{
 			struct Temp
 			{
@@ -1010,7 +1024,7 @@ void NAIVE_Test()
 					}
 					if (row > 0)
 					{
-						if (node.leftSibling)
+						if (node.rightSibling) // Next sibling exists
 						{
 							printf("„¥");
 						}
@@ -1023,7 +1037,7 @@ void NAIVE_Test()
 
 					char buffer[5];
 					buffer[4] = '\0';
-					printf("%s\n", getName(node.value, buffer));
+					printf("%s\n", node.toString().ptr);
 
 					++column;
 
@@ -1152,20 +1166,18 @@ void NAIVE_Test()
 		{
 			SizeType COUNT = allNodes.getSize();
 
-			char name[4] = { 'A' + Random::get(0,26), 'a' + Random::get(0,26), 'a' + Random::get(0,26), 'a' + Random::get(0,26) };
+			char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
 			Handle handle = getHandle(name);
 
-			if (Random::get(0, 16) < 5 && COUNT > 2)
+			if (Random::get(0, 16) < 5 && COUNT > 3)
 			{
-				SizeType parent = Random::get(1, COUNT - 1);
-				SizeType child = Random::get(parent + 1, COUNT);
+				SizeType parent = Random::get(1, COUNT - 2);
+				SizeType child = Random::get(parent + 2, COUNT);
 				FLAT_ASSERT(parent < child);
-
 
 				{
 					Node* node = NULL;
 					Node* parentNode = NULL;
-
 					{
 						ScopedProfiler prof(&cumulativeSeekTime); ++cumulativeSeekTimeCount;
 						bool success = tryGetNthNode(tree.root, node, child);
@@ -1347,7 +1359,7 @@ void test()
 {
 	memset(LogBuffer, ' ', sizeof(LogBuffer));
 
-	uint32_t seed = 1771551 * time(NULL);
+	uint32_t seed = 1771551 * (SizeType)time(NULL);
 	seed = 1771551;
 
 	// Table hearder
@@ -1361,47 +1373,73 @@ void test()
 		logTable("Seek\t");
 	}
 
-	// Flat
-	if (true)
+	enum
 	{
+		Flat1 = 1 << 0,
+		Flat2 = 1 << 1,
+		Flat3 = 1 << 2,
+		Rival = 1 << 3,
+		Naive = 1 << 4,
+		Every = 1 << 6
+	};
+
+	const uint32_t TestMask
+		=
+		Flat1 |
+		Flat2 |
+		Flat3 |
+		Rival |
+		Naive |
+		Every |
+		0;
+
+
+	// Flat
+	if ((TestMask & Flat1) != 0 || (TestMask & Every) != 0)
+	{	
 		Rundi = 0;
 		logTable("\nFlat Tree\t");
+		printf("\nFlat Tree\n");
 		Random::init(seed);
 		FLAT_Test();
 	}
 
 	// Hot cache
-	if (false)
+	if ((TestMask & Flat2) != 0 || (TestMask & Every) != 0)
 	{
 		Rundi = 1;
 
 		logTable("\nFlat Tree Cached\t");
+		printf("\nFlat Tree Cached\n");
 		Random::init(seed);
 		FLAT_Test();
 	}
 
 	// Cold cache
-	if (false)
+	if ((TestMask & Flat3) != 0 || (TestMask & Every) != 0)
 	{
 		Rundi = 2;
 
 		logTable("\nFlat Tree With Cold Cache\t");
+		printf("\nFlat Tree With Cold Cache\n");
 		Random::init(seed);
 		FLAT_Test();
 	}
 
 	// Naive tree
-	if (true)
+	if ((TestMask & Naive) != 0 || (TestMask & Every) != 0)
 	{
 		logTable("\nNaive Tree\t");
+		printf("\nNaive Tree\n");
 		Random::init(seed);
 		NAIVE_Test();
 	}
 
 	// Rival tree
-	if(true)
+	if ((TestMask & Rival) != 0 || (TestMask & Every) != 0)
 	{
 		logTable("\nBuffered Tree\t");
+		printf("\nBuffered Tree\n");
 		Random::init(seed);
 		RIVAL_Test();
 	}
@@ -1427,7 +1465,9 @@ void test()
 	}
 	printf("%s\n", LogBuffer);
 
-	FILE* f = fopen("output.csv", "w");
+	FILE* f = NULL;
+	errno_t err = fopen_s(&f, "output.csv", "w");
+	FLAT_ASSERT(err >= 0);
 	fprintf(f, "%s", LogBuffer);
 	fclose(f);
 

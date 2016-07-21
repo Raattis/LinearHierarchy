@@ -69,11 +69,44 @@ struct RivalTreeNode
 		{
 			FLAT_ASSERT(children[i]->parent == this);
 
-			FLAT_ASSERT(i <= 0                      || children[i - 1]->rightSibling  == children[i]);
-			FLAT_ASSERT(i + 1 >= children.getSize() || children[i + 1]->leftSibling == children[i]);
+			FLAT_ASSERTF(i <= 0                       || children[i - 1]->rightSibling == children[i], "This: %s,  Left: %s", children[i]->toString().ptr, children[i - 1]->toString().ptr);
+			FLAT_ASSERTF(i + 1 >= children.getSize() || children[i + 1]->leftSibling  == children[i], "This: %s, Right: %s", children[i]->toString().ptr, children[i + 1]->toString().ptr);
 
 			children[i]->sanityCheck();
 		}
+	}
+
+	String getName() const
+	{
+		if(!this)
+			return String("NULL", 4);
+		return String(value.text, 4);
+	}
+	String toString() const
+	{
+		if (!this)
+			return String("NULL", 4);
+		String result(getName());
+		//result += " (P:";
+		//result += parent->getName();
+		result += " (L: ";
+		result += leftSibling->shortToString();
+		result += ", R: ";
+		result += rightSibling->shortToString();
+		result += ")";
+		return result;
+	}
+	String shortToString() const
+	{
+		if (!this)
+			return String("NULL", 4);
+		String result(getName());
+		//result += " (L: ";
+		//result += leftSibling->getName();
+		//result += ", R: ";
+		//result += rightSibling->getName();
+		//result += ")";
+		return result;
 	}
 
 	ValueType value;
@@ -273,7 +306,7 @@ struct RivalTree
 			{
 				if (children.getSize() > 0)
 				{
-					left = children.getBack();
+					left = children[0];
 					left->rightSibling = node;
 				}
 				children.insert(0, node);
@@ -465,7 +498,7 @@ struct NaiveTree
 			{
 				if (children.getSize() > 0)
 				{
-					right = children.getBack();
+					right = children[0];
 					right->leftSibling = node;
 				}
 				children.insert(0, node);
