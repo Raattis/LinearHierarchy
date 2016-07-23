@@ -62,5 +62,12 @@ struct String
 		ptr = newPtr;
 	}
 
+	void operator +=(float f)
+	{
+		char buffer[128];
+		sprintf_s(buffer, "%f", f);
+		operator +=(buffer);
+	}
+
 	char* ptr;
 };

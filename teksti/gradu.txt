@@ -1,0 +1,95 @@
+
+
+
+
+
+
+
+
+Johdanto
+
+Linked list on hidas. Array on aina parempi vaihtoehto. [lähde?] Tutkin tässä tutkielmassa samaa puurakenteille.
+
+Ehdattamassani puurakenteessa (tästedes litteä puu) pointteripuun sijaan solmut ovat yksiulotteisessa arrayssä, jossa on arvon lisäksi vain syvyystieto. Solmut ovat järjestetty niin, että perillissolmut ovat välittömästi esivanhempisolmun jälkeen.
+
+Tällä saavutetaan parempi cache-ystävällisyys, mutta ennen kaikkea muistiväylä hyödynnetään tehokkaammin. Keskusmuistista hakeminen on 200x hitaampaa kuin prosessorin cachesta. [lähde?]
+
+Keskusmuistista haetaan asioita muistiväylän kokoisissa paloissa. Tämän koko on tyypillisesti 256 - 512 bittiä. [VARMISTA & lähde?]
+
+Kun puu on pakattu tiiviisti muistiin, voidaan se hakea vähemmillä pyynnöillä kuin jos se olisi varattu pitkin poikin muistia. Koska halutun datan mukana prosessorin välimuistiin tulee aina muutama seuraava tavu, on järkevää huolehtia siitä, että nämä tavut ovat todennäköisesti jotain meille hyödyllistä. Muistivaraajat eivät tyypillisesti panosta erityisesti tämän tilanteen saavuttamiseen. [lähde?]
+
+Jotta haluamamme data olisi todennäköisesti peräkkäin muistissa, kannattaa se varata taulukkoon. Tätä voi hyödyntää myös perinteisessä pointteripuussa alustamalla sen solmut ennalta varattuun pooliin (= suomeksi varanto :/ ).
+
+Toisin kuin perinteisessä pointteripuussa, ehdottamassani muistirakenteessa ei ole tarvetta säilöä minkäänlaisia lapsi- tai vanhempipointtereita. Tämä vähentää ylimäärisen datan tarvetta arvojen välissä, mikä nopeuttaa puun läpikäymistä lineaarisesti.
+
+Litteässä puussa arvojen lisäksi tallennamme toiseen taulukkoon numerona tiedon siitä, kuinka syvällä puussa kyseinen solmu on. Tietorakenteen topologia sisältää implisiittisesti kaiken muun tiedon vanhemmuus- ja sisaruussuhteista.
+
+<lähdekoodi>
+struct PointerTreeNode
+{
+	Value               value;
+	PointerTree*        parent;
+	Array<PointerTree*> children;
+};
+struct PointerTree
+{
+	PointerTree root;
+};
+</lähdekoodi>
+Kaavio #. perinteine pointteripuu C++:n kaltaisella kiellellä
+
+<lähdekoodi>
+struct FlatTree
+{
+	Array<Value  > values;
+	Array<Integer> depths;
+};
+</lähdekoodi>
+Kaavio #. ehotettu muistirakenne C++:n kaltaisella kiellellä
+
+
+Huonona puolena litteän puun kannalta, jokainen sille suoritettu muokkausoperaatio on suoritettava siirtelemällä toisinaan isojakin muistikönttejä. Hypoteesini kuitenkin on, että cache-ystävällisyytensä ansiosta litteä puu on silti tehokkaampi kuin pointteri puu, muuten paitsi aivan äärimmäisillä puu koilla. Suorituskykytestini osoittavat, että tämä pitäisi myös paikkansa.
+
+Koska litteä puu on pohjimmiltaan vain taulukkomuotoista dataa, on siitä helppo tehdä cache-rakenteita, jotka auttavat sitä suoritumaan joissain tehtävissä nopeammin. Esimerkiksi cache-rakenne, jossa on samalla indeksillä kuin varsinaisessa litteässä puussa solmun seuraavan sisarsolmun indeksi. Cache-rakenteita on myös tehokas koota, käymällä 
+
+
+
+
+
+Testaus metodologia
+
+Toteutin sekä litteän puun että perinteisen pointteripuun, ja niiden muokkaukseen vaadittavat algoritmit C++:lla.
+
+Kirjoitin testauskoodin, joka kokoaa topologisesti identtiset puurakenteet kaikilla 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

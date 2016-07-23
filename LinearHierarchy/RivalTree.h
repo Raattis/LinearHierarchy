@@ -244,22 +244,22 @@ void makeChildOfImpl(Node* node, Node* parent)
 	connectToParent<Sorter, Node>(node, parent);
 }
 
-static SizeType count(const RivalTreeNodeBase* node)
+static SizeType findCount(const RivalTreeNodeBase* node)
 {
 	SizeType result = 1;
 	for (SizeType i = 0; i < node->children.getSize(); i++)
 	{
-		result += count(node->children[i]);
+		result += findCount(node->children[i]);
 	}
 	return result;
 }
 
-static SizeType depth(const RivalTreeNodeBase* node)
+static SizeType findDepth(const RivalTreeNodeBase* node)
 {
 	SizeType maxDepth = 0;
 	for (SizeType i = 0; i < node->children.getSize(); i++)
 	{
-		SizeType d = depth(node->children[i]) + 1;
+		SizeType d = findDepth(node->children[i]) + 1;
 		if (d > maxDepth)
 			maxDepth = d;
 	}
