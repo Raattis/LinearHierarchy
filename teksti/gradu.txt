@@ -6,13 +6,20 @@
 
 
 
-Johdanto
+-- Johdanto
 
 Linked list on hidas. Array on aina parempi vaihtoehto. [lähde?] Tutkin tässä tutkielmassa samaa puurakenteille.
 
-Ehdattamassani puurakenteessa (tästedes litteä puu) pointteripuun sijaan solmut ovat yksiulotteisessa arrayssä, jossa on arvon lisäksi vain syvyystieto. Solmut ovat järjestetty niin, että perillissolmut ovat välittömästi esivanhempisolmun jälkeen.
+!!Ei binääripuu vaan vapaa määrä lapsia.!!
 
-Tällä saavutetaan parempi cache-ystävällisyys, mutta ennen kaikkea muistiväylä hyödynnetään tehokkaammin. Keskusmuistista hakeminen on 200x hitaampaa kuin prosessorin cachesta. [lähde?]
+Ehdattamassani puurakenteessa (tästedes taulukkopuu) pointteripuun sijaan solmut ovat yksiulotteisessa arrayssä, jossa on arvon lisäksi vain syvyystieto. Solmut ovat järjestetty niin, että perillissolmut ovat välittömästi esivanhempisolmun jälkeen. Kaavio [AsciiArt]
+
+<kuva>
+ASCII ART PUUN RAKENTEESTA KUVANA
+</kuva>
+
+Tällä saavutetaan parempi cache-ystävällisyys, mutta ennen kaikkea muistiväylä hyödynnetään tehokkaammin. Keskusmuistista hakeminen on 200x hitaampaa kuin prosessorin cachesta. [lähde?] <lista prosessorien muistihuti sykleistä?>
+
 
 Keskusmuistista haetaan asioita muistiväylän kokoisissa paloissa. Tämän koko on tyypillisesti 256 - 512 bittiä. [VARMISTA & lähde?]
 
@@ -20,9 +27,7 @@ Kun puu on pakattu tiiviisti muistiin, voidaan se hakea vähemmillä pyynnöill�
 
 Jotta haluamamme data olisi todennäköisesti peräkkäin muistissa, kannattaa se varata taulukkoon. Tätä voi hyödyntää myös perinteisessä pointteripuussa alustamalla sen solmut ennalta varattuun pooliin (= suomeksi varanto :/ ).
 
-Toisin kuin perinteisessä pointteripuussa, ehdottamassani muistirakenteessa ei ole tarvetta säilöä minkäänlaisia lapsi- tai vanhempipointtereita. Tämä vähentää ylimäärisen datan tarvetta arvojen välissä, mikä nopeuttaa puun läpikäymistä lineaarisesti.
-
-Litteässä puussa arvojen lisäksi tallennamme toiseen taulukkoon numerona tiedon siitä, kuinka syvällä puussa kyseinen solmu on. Tietorakenteen topologia sisältää implisiittisesti kaiken muun tiedon vanhemmuus- ja sisaruussuhteista.
+Toisin kuin perinteisessä pointteripuussa, ehdottamassani muistirakenteessa ei ole tarvetta säilöä minkäänlaisia lapsi- tai vanhempipointtereita. Tämä vähentää ylimäärisen datan tarvetta arvojen välissä, mikä nopeuttaa puun läpikäymistä. Vertaa kaavio [structPointerTree] ja kaavio [structArrayTree].
 
 <lähdekoodi>
 struct PointerTreeNode
@@ -36,21 +41,98 @@ struct PointerTree
 	PointerTree root;
 };
 </lähdekoodi>
-Kaavio #. perinteine pointteripuu C++:n kaltaisella kiellellä
+Kaavio structPointerTree. Perinteine pointteripuu C++:n kaltaisella kiellellä. Toisinaan pointteripuun solmussa on myös pointterit sisarsolmuihin.
 
 <lähdekoodi>
-struct FlatTree
+struct ArrayTree
 {
 	Array<Value  > values;
 	Array<Integer> depths;
 };
 </lähdekoodi>
-Kaavio #. ehotettu muistirakenne C++:n kaltaisella kiellellä
+Kaavio structArrayTree. ehdotettu muistirakenne C++:n kaltaisella kiellellä
+
+Taulukkopuussa arvojen lisäksi tallennamme toiseen taulukkoon numerona tiedon siitä, kuinka syvällä puussa kyseinen solmu on. Tietorakenteen topologia sisältää implisiittisesti kaiken muun tiedon vanhemmuus- ja sisaruussuhteista.
 
 
-Huonona puolena litteän puun kannalta, jokainen sille suoritettu muokkausoperaatio on suoritettava siirtelemällä toisinaan isojakin muistikönttejä. Hypoteesini kuitenkin on, että cache-ystävällisyytensä ansiosta litteä puu on silti tehokkaampi kuin pointteri puu, muuten paitsi aivan äärimmäisillä puu koilla. Suorituskykytestini osoittavat, että tämä pitäisi myös paikkansa.
+Huonona puolena taulukkopuun kannalta, jokainen sille suoritettu muokkausoperaatio on suoritettava siirtelemällä toisinaan isojakin muistikönttejä. Hypoteesini kuitenkin on, että cache-ystävällisyytensä ansiosta taulukkopuu on silti tehokkaampi kuin pointteri puu, muuten paitsi aivan äärimmäisillä puu koilla. Suorituskykytestini osoittavat, että tämä pitäisi myös paikkansa.
 
-Koska litteä puu on pohjimmiltaan vain taulukkomuotoista dataa, on siitä helppo tehdä cache-rakenteita, jotka auttavat sitä suoritumaan joissain tehtävissä nopeammin. Esimerkiksi cache-rakenne, jossa on samalla indeksillä kuin varsinaisessa litteässä puussa solmun seuraavan sisarsolmun indeksi. Cache-rakenteita on myös tehokas koota, käymällä 
+Hyvänä puolena taulukkopuun suora läpikäyminen kulkee puun solmut syvyys-ensin järjestyksesä (depth-first). Tämä on hyödyllistä, koska monissa käyttötarkoituksissa puuta käydään läpi juuri tässä järjestyksesä. Esimerkiksi käyttöliittymäohjelmoinnissa widgettien ladonta, käyttäjän syötteen välitys ja piirto voidaan kaikki tehdä tässä järjestyksessä.
+
+Tehokkuuden kannalta taulukkopuun tärkein hyvä puoli verrattuna pointteripuuhun on, että puussa vaeltaminen ei edellytä pointtereiden dereferointia. On tärkeä muistaa, että pointterin seuraaminen voi johtaa muistiin, joka ei ole prosessorin välimuistissa, mikä aiheuttaa niin kutsutun muistihudin (=cache miss). Muistihudista aiheutuvaa suorituskykymenetystä ei ole mahdollista optimoida pois compilereillä, joten ohjelmoijien on oltava valppaina muistiraktenteidensa kanssa.
+
+Jos tietorakennetta kuten puuta käydään läpi paljon useammin kuin sitä muokataan, sen rakentamiseen liittyvät huonot puolet ja hidasteet ovat mitätön seikka verrattuna haussa esiintyviin hidasteisiin.
+
+
+
+
+
+--Lisäys, poisto ja siirto operaatiot
+
+Niissä pitää memmovettaa kamaa.
+
+Jos on iso chunkki, tarvitsee joskus myös dynaamisesti varata muistia, ettei stack overflowaa.
+
+Koodiesimerkkejä.
+
+
+
+
+
+
+--Syvyys, etsintä ja leaf travel
+
+
+
+
+
+--Transform2D esimerkki
+
+
+
+
+
+
+
+--Cache rakenteet
+
+Koska taulukkopuu on pohjimmiltaan vain taulukkomuotoista dataa, on siitä helppo tehdä cache-rakenteita, jotka auttavat sitä suoritumaan joissain tehtävissä nopeammin. Esimerkiksi cache-rakenne, jossa on samalla indeksillä kuin varsinaisessa taulukkopuussa solmun seuraavan sisarsolmun indeksi.
+
+Cache-rakenteita on myös tehokas koota, käymällä taulukkopuu läpi takaperin ja tallentamalla kunkin syvyyden edellisen solmun numero tilapäiseen taulukkoon. Tämä arvo voidaan sitten sijottaa cache-rakenteeseen seuraavan solmun kohdalle. Tätä havainnollistetaan kaaviossa [makeCache].
+
+
+<lähdekoodi>
+void makeCache(NextSiblingCache cache, ArrayTree tree)
+{
+	// Taulukko jossa tilapäisesti säilytetään
+	// jokaisen syvyyden edellisen solmun indeksi
+	Array<Integer> previous;
+	
+	// Varaa tilaa taulukkoon jokaiselle syvyydelle
+	// ja alusta taulukon jokainen arvo InvalidIndexiksi
+	resize(previous, getDepth(tree));
+	setValues(previous, InvalidIndex);
+	
+	Integer previousDepth = 0;
+	
+	// Käy taulukkopuu läpi takaperin tallentaen cacheen
+	// edellisen sisaren arvo.
+	for(Integer i = count; i-- > 0; )
+	{
+		// Tallenna edellinen samalla syvyydellä oleva solmu
+		Integer depth = tree.depths[i];
+		c[i] = previous[depth];
+		previous[depth] = i;
+		
+		// Jos syvyys vähenee, edellinen arvo ei voi olla
+		// enää kenenkään sisarsolmu.
+		if(depth < previousDepth)
+			previous[previousDepth] = InvalidIndex;
+		previousDepth = depth;
+	}
+}
+</lähdekoodi>
+Kaavio makeCache. Esimerkki cache-rakenteen kokoamisesta. Tämä on mahdollista toteuttaa ilman dynaamista muistin varausta käymällä taulukkopuu läpi syvyyden mukaan osiin jaettuna.
 
 
 
@@ -58,15 +140,41 @@ Koska litteä puu on pohjimmiltaan vain taulukkomuotoista dataa, on siitä helpp
 
 Testaus metodologia
 
-Toteutin sekä litteän puun että perinteisen pointteripuun, ja niiden muokkaukseen vaadittavat algoritmit C++:lla.
+Toteutin sekä taulukkopuun että perinteisen pointteripuun, ja niiden muokkaukseen vaadittavat algoritmit C++:lla.
 
-Kirjoitin testauskoodin, joka kokoaa topologisesti identtiset puurakenteet kaikilla 
+Kirjoitin testauskoodin, joka kasaa topologisesti identtiset puurakenteet kaikilla eri kokoonpanoilla.
+
+* Taulukkopuu
+* Taulukkopuu + cache
+* Taulukkopuu + cache joka pitää joka kerta alustaa uusiksi
+* Pointteripuu
+* Pointteripuu jonka solmut varataan poolista
+
+Testit ajetaan useilla eri määrillä solmuja, jotka vaihtelevat kymmenestä 300 000:een.
+
+Jokaista testiä toistetaan useita kertoja, jotta satunnaiset suorituskykyheilahtelut saadaan suodatettua mahdollisimman tehokkaasti pois.
+
+Käsiteltävien solmujen yhtenäisyyden säilyttämiseksi eri puissa, pointteripuussa haetaan relevantit solmut syvyys-ensin järjestyksessä (samassa johon taulukkopuu on järjestetty). Tämä hidastaa pointteripuu testejä yleisesti, mutta sen ei pitäisi vaikuta mittaustuloksiin koska ajastukset tehdään jokaiselle operaatiolla yksittäin kuten kaaviossa [testMove] näytetään. Tämä saattaa vaikuttaa testaustuloksiin positiivisesti, koska pointteripuun solmuja on jo valmiiksi prosessorin välimuistissa, kun testi alkaa.
 
 
-
-
-
-
+<lähdekoodi>
+void testMove(Integer childIndex, Integer parentIndex)
+{
+	// Valmistele testi
+	PointerTreeNode* child  = getNthChild(tree, childIndex);
+	PointerTreeNode* parent = getNthChild(tree, parentIndex);
+	Time duration;
+	
+	// Tee testi
+	{
+		Time start = getPreciseTime();
+		moveToParent(child, parent);
+		Time end = getPreciseTime();
+		duration = end - start;
+	}
+}
+</lähdekoodi>
+Kaavio testMove. 
 
 
 
