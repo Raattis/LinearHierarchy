@@ -12,22 +12,21 @@ Linked list on hidas. Array on aina parempi vaihtoehto. [lähde?] Tutkin tässä
 
 !!Ei binääripuu vaan vapaa määrä lapsia.!!
 
-Ehdattamassani puurakenteessa (tästedes taulukkopuu) pointteripuun sijaan solmut ovat yksiulotteisessa arrayssä, jossa on arvon lisäksi vain syvyystieto. Solmut ovat järjestetty niin, että perillissolmut ovat välittömästi esivanhempisolmun jälkeen. Kaavio [AsciiArt]
+Toisin kuin pointteripuussa ehdottamassani tietorakenteessa (tästedes taulukkopuu) solmut ovat yksiulotteisessa taulukossa. Hyötykuorman lisäksi ainoa tarvittava lisätieto on solmon syvyys. Solmut ovat järjestetty niin, että solmun perilliset ovat taulukossa välittömästi vanhempansa jälkeen. Kaavio [AsciiArt]
 
 <kuva>
 ASCII ART PUUN RAKENTEESTA KUVANA
 </kuva>
 
-Tällä saavutetaan parempi cache-ystävällisyys, mutta ennen kaikkea muistiväylä hyödynnetään tehokkaammin. Keskusmuistista hakeminen on 200x hitaampaa kuin prosessorin cachesta. [lähde?] <lista prosessorien muistihuti sykleistä?>
-
+Tällä saavutetaan parempi cache-ystävällisyys ja tehokkaampi muistiväylän hyödyntäminen. Datan noutaminen keskusmuistista on noin 200 kertaa hitaampaa kuin prosessorin nopeimmasta välimuistista. [lähde?] <lista prosessorien muistihuti sykleistä?>
 
 Keskusmuistista haetaan asioita muistiväylän kokoisissa paloissa. Tämän koko on tyypillisesti 256 - 512 bittiä. [VARMISTA & lähde?]
 
-Kun puu on pakattu tiiviisti muistiin, voidaan se hakea vähemmillä pyynnöillä kuin jos se olisi varattu pitkin poikin muistia. Koska halutun datan mukana prosessorin välimuistiin tulee aina muutama seuraava tavu, on järkevää huolehtia siitä, että nämä tavut ovat todennäköisesti jotain meille hyödyllistä. Muistivaraajat eivät tyypillisesti panosta erityisesti tämän tilanteen saavuttamiseen. [lähde?]
+Kun puu on pakattu tiiviisti muistiin, voidaan se noutaa vähemmillä pyynnöillä kuin jos se olisi varattu pitkin poikin muistia. Koska keskusmuistista noudetaan dataa aina koko muistiväylän leveydeltä, on vain järkevää huolehtia siitä, että tästä datasta mahdollisimman suuri osa on jotain hyödyllistä. Muistiallokaattorit eivät tyypillisesti huolehdi tästi oma-alotteisesti. [lähde?]
 
-Jotta haluamamme data olisi todennäköisesti peräkkäin muistissa, kannattaa se varata taulukkoon. Tätä voi hyödyntää myös perinteisessä pointteripuussa alustamalla sen solmut ennalta varattuun pooliin (= suomeksi varanto :/ ).
+Jotta haluttava data olisi tiiviisti muistissa, kannattaa se varata taulukkoon. Tätä tekniikkaa voi käyttää myös perinteisellä pointteripuulla alustamalla sen solmut ennaltavarattuun pooliin (= suomeksi varanto :/ ).
 
-Toisin kuin perinteisessä pointteripuussa, ehdottamassani muistirakenteessa ei ole tarvetta säilöä minkäänlaisia lapsi- tai vanhempipointtereita. Tämä vähentää ylimäärisen datan tarvetta arvojen välissä, mikä nopeuttaa puun läpikäymistä. Vertaa kaavio [structPointerTree] ja kaavio [structArrayTree].
+Toisin kuin perinteisessä pointteripuussa, ehdottamassani muistirakenteessa ei ole tarvetta säilöä minkäänlaisia lapsi- tai vanhempipointtereita. Tämä poistaa kaiken ylimäärisen datan arvojen välistä, mikä nopeuttaa puun noutamista muistista. Vertaa kaavio [structPointerTree] ja kaavio [structArrayTree].
 
 <lähdekoodi>
 struct PointerTreeNode
@@ -52,8 +51,10 @@ struct ArrayTree
 </lähdekoodi>
 Kaavio structArrayTree. ehdotettu muistirakenne C++:n kaltaisella kiellellä
 
+
 Taulukkopuussa arvojen lisäksi tallennamme toiseen taulukkoon numerona tiedon siitä, kuinka syvällä puussa kyseinen solmu on. Tietorakenteen topologia sisältää implisiittisesti kaiken muun tiedon vanhemmuus- ja sisaruussuhteista.
 
+Koska syvyysarvot ovat tiiviissä taulukossa, voidaan esimerkiksi maksimisyvyyden hakemisessa hyödyntää rinnakkaisia SIMD-operaatioita, mikä nopeuttaa taulukon läpikäymistä huomattavasti. Testieni mukaan SIMD-toteutus suoriutuu maksimin hakemisesta kymmenesosassa tavallisen luupin suoritusajasta.
 
 Huonona puolena taulukkopuun kannalta, jokainen sille suoritettu muokkausoperaatio on suoritettava siirtelemällä toisinaan isojakin muistikönttejä. Hypoteesini kuitenkin on, että cache-ystävällisyytensä ansiosta taulukkopuu on silti tehokkaampi kuin pointteri puu, muuten paitsi aivan äärimmäisillä puu koilla. Suorituskykytestini osoittavat, että tämä pitäisi myös paikkansa.
 
@@ -138,7 +139,7 @@ Kaavio makeCache. Esimerkki cache-rakenteen kokoamisesta. Tämä on mahdollista 
 
 
 
-Testaus metodologia
+Testausmetodologia
 
 Toteutin sekä taulukkopuun että perinteisen pointteripuun, ja niiden muokkaukseen vaadittavat algoritmit C++:lla.
 
@@ -161,8 +162,9 @@ Käsiteltävien solmujen yhtenäisyyden säilyttämiseksi eri puissa, pointterip
 void testMove(Integer childIndex, Integer parentIndex)
 {
 	// Valmistele testi
-	PointerTreeNode* child  = getNthChild(tree, childIndex);
-	PointerTreeNode* parent = getNthChild(tree, parentIndex);
+	PointerTreeNode* child  = getNthDescendant(tree.root, childIndex);
+	PointerTreeNode* parent = getNthDescendant(tree.root, parentIndex);
+	
 	Time duration;
 	
 	// Tee testi
@@ -174,7 +176,9 @@ void testMove(Integer childIndex, Integer parentIndex)
 	}
 }
 </lähdekoodi>
-Kaavio testMove. 
+Kaavio testMove. Esimerkki testin toteutuksesta. Lapsisolmujen hakemiseen kuluva aika ei ole mukana testin suoritukseen laskettavassa ajassa.
+
+Mielenkiinnon vuoksi testeissä otetaan myös talteen pointteripuiden solmujen hakemiseen kuluva aika. Periaatteessa tähän kuluva suoritusaika on O-notaatiolla ilmaistuna O(N), mutta koska jokainen pointterin hakeminen voi mahdollisesti aiheuttaa muistihudin, on N:n kerroin erittäin suuri.
 
 
 
