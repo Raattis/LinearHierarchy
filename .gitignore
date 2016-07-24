@@ -419,3 +419,4 @@ paket-files/
 .idea/
 *.sln.iml
 LinearHierarchy/output.csv
+*.ods#

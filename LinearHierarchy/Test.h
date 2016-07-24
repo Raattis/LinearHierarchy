@@ -21,29 +21,23 @@ typedef uint32_t SizeType;
 #ifdef _DEBUG
 const SizeType ArrBaseTestSizesCount = 2;
 const SizeType ArrTransformTestSizesCount = 6;
-const SizeType ArrTransformIterationsCount = 2;
-const SizeType TransformRoundNumber = 2;
 
 const SizeType DebugBaseTestRoundNumber = 3;
 
 #elif defined(MAX_PERF)
-const SizeType ArrBaseTestSizesCount = 12;
+const SizeType ArrBaseTestSizesCount = 10;
 const SizeType ArrTransformTestSizesCount = 12;
-const SizeType ArrTransformIterationsCount = 2;
-const SizeType TransformRoundNumber = 100;
 
 #else
-const SizeType ArrBaseTestSizesCount = 12;
+const SizeType ArrBaseTestSizesCount = 10;
 const SizeType ArrTransformTestSizesCount = 12;
-const SizeType ArrTransformIterationsCount = 2;
-const SizeType TransformRoundNumber = 10;
 #endif
 
-const SizeType ArrBaseTestSizes[]        = { 10,     50,    100,   200,   500,  1000, 2000, 5000, 10000, 20000 };
-const SizeType ArrBaseTestRoundNumbers[] = { 100000, 20000, 10000, 5000,  2000, 1000, 200,  50,   5,     4 };
+const SizeType ArrBaseTestSizes[] =        { 10,     50,    100,   200,   500,  1000, 2000, 5000, 10000, 20000 };
+const SizeType ArrBaseTestRoundNumbers[] = { 50000,  20000, 5000,  2000,  1000, 500,  100,  10,   3,     3 };
 
-const SizeType ArrTransformTestSizes[]  = { 10, 20, 50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500 }; // , 5000, 10000 };
-const SizeType ArrTransformIterations[] = { 1, 10 };
+const SizeType ArrTransformTestSizes[]    = { 10,     20,   50,    100,   200,  500,   1000, 1500, 2000, 2500, 3000, 3500 };
+const SizeType ArrTransformRoundNumbers[] = { 10000,  5000, 2000,  1000,  1000, 1000,  500,  300,  100,  50,   50,   50 };
 
 #ifdef MAX_PERF
 const bool VerbosePrinting = false;
@@ -291,8 +285,8 @@ namespace // Result storage
 
 		// Transform tests only
 		StatTransformIt1 = 5,
-		StatTransformIt10 = 5,
-		StatTransformMax = 6,
+		StatTransformIt10 = 6,
+		StatTransformMax = 7,
 	};
 
 	// tree type, tree size, statistics
@@ -462,9 +456,9 @@ struct Random
 		random = seed;
 		randomState[0] = uint64_t((1181783497276652981U / 3U + 1181783497276652981U / 13U) * 71551U);
 		randomState[1] = uint64_t(1181783497276652981U);
-		counter = 0;	
+		counter = 0;
 	}
-	
+
 	static uint64_t xorshift128plus() {
 		uint64_t x = randomState[0];
 		uint64_t const y = randomState[1];
@@ -499,7 +493,8 @@ uint64_t Random::randomState[2] = {};
 void baseTestEndPrints(double diff)
 {
 	printf("\n");
-	printf("%.4f s, adds: %d, erases: %d, moves: %d\n", diff, countStat(StatAdd), countStat(StatErase), countStat(StatMove));
+	printf("adds: %d, erases: %d, moves: %d\n", countStat(StatAdd), countStat(StatErase), countStat(StatMove));
+	//printf("%.4f s, adds: %d, erases: %d, moves: %d\n", diff, countStat(StatAdd), countStat(StatErase), countStat(StatMove));
 	printf("average count: %.1lf, depth: %.1lf, max count: %.0lf, depth: %.0lf\n", avgStat(StatCountAvg), avgStat(StatDepthAvg), maxStat(StatCountMax), maxStat(StatDepthMax));
 	printf("average travel depth: %.1lf\n", avgStat(StatTravelDepth));
 
@@ -515,7 +510,7 @@ void baseTestEndPrints(double diff)
 	printf("Average LeafTravel -\t%d\t-  %.4lf us\n", PRTINT_HALP(LeafTravel));
 #undef PRTINT_HALP
 
-		printf("\n");
+	printf("\n");
 }
 
 
@@ -609,7 +604,8 @@ void FLAT_Test()
 
 		const SizeType targetCount = (SizeType)ArrBaseTestSizes[fullRoundNumber];
 
-		printf("\nTargetCount: %u\n", targetCount);
+		printf("\n%s tree base test\n", (FLAT_NO_CACHE_CONDITION) ? "Flat" : (FLAT_CACHE_CONDITION) ? "Cached flat" : "Cold cached flat");
+		printf("Node count: %u\n\n", targetCount);
 
 #ifdef _DEBUG
 		const SizeType RoundNumber = DebugBaseTestRoundNumber;
@@ -619,7 +615,7 @@ void FLAT_Test()
 
 		for (SizeType j = 0; j < RoundNumber; j++)
 		{
-			if(ArrBaseTestRoundNumbers[fullRoundNumber] <= 1000)
+			if (ArrBaseTestRoundNumbers[fullRoundNumber] <= 700)
 				printf(".");
 
 			// Add
@@ -710,7 +706,7 @@ void FLAT_Test()
 			}
 
 			// Travel
-			
+
 			siblingCache.cacheIsValid = false; // Invalidate cache before starting to travel, just in case
 			if (FLAT_CACHE_CONDITION)
 				siblingCache.makeCacheValid(l);
@@ -931,7 +927,8 @@ void Other_Tree_Test_Impl()
 
 		const SizeType targetCount = (SizeType)ArrBaseTestSizes[fullRoundNumber];
 
-		printf("\nTargetCount: %u\n", targetCount);
+		printf("\n%s tree base test\n", sizeof(Tree) == sizeof(NaiveTree<Handle, HandleSorter>) ? "Naive" : "Pooled");
+		printf("Node count: %u\n\n", targetCount);
 
 #ifdef _DEBUG
 		const SizeType RoundNumber = DebugBaseTestRoundNumber;
@@ -941,7 +938,7 @@ void Other_Tree_Test_Impl()
 
 		for (SizeType j = 0; j < RoundNumber; j++)
 		{
-			if (ArrBaseTestRoundNumbers[fullRoundNumber] <= 1000)
+			if (ArrBaseTestRoundNumbers[fullRoundNumber] <= 700)
 				printf(".");
 
 			// Add
@@ -1202,16 +1199,25 @@ namespace
 
 void FLAT_TransformTest()
 {
-	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount * ArrTransformIterationsCount; fullRoundNumber++)
+	FLAT_VECTOR<Transform> resultTransforms;
+	resultTransforms.reserve(ArrTransformTestSizes[ArrTransformTestSizesCount - 1]);
+
+	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount; fullRoundNumber++)
 	{
+		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber];
+		const SizeType TransformIterations = 10;
 
-		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber / ArrTransformIterationsCount];
-		const SizeType TransformIterations = ArrTransformIterations[fullRoundNumber % ArrTransformIterationsCount];
+		CurrentTreeSize = fullRoundNumber;
 
-		CurrentTreeSize = fullRoundNumber / ArrTransformIterationsCount;
+		printf("\nFlat tree transform multiplication test\n");
+		printf("Node count: %u\n", TransformTestSize);
+		//printf("Iterations: %u\n", TransformIterations);
 
-		printf("\nSize:     %u\n", TransformTestSize);
-		printf("Iterations: %u\n", TransformIterations);
+#ifndef _DEBUG
+		const SizeType TransformRoundNumber = ArrTransformRoundNumbers[fullRoundNumber];
+#else
+		const SizeType TransformRoundNumber = 2;
+#endif
 
 		for (SizeType rn = 0; rn < TransformRoundNumber; rn++)
 		{
@@ -1241,9 +1247,6 @@ void FLAT_TransformTest()
 							setTransform(l.values[i]);
 			}
 
-			FLAT_VECTOR<Transform> resultTransforms;
-			resultTransforms.reserve(TransformTestSize);
-
 			// Get results
 			{
 				Transform tempBuffer[256];
@@ -1253,29 +1256,59 @@ void FLAT_TransformTest()
 				{
 					resultTransforms.clear();
 
-					ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
-
-					resultTransforms.pushBack(l.values[0]);
-					tempBuffer[0] = l.values[0];
-
-					if (CheckHashes && IsFirstRound && CurrentTransform < TransformBufferSize)
-						setTransform(resultTransforms.getBack());
-					if (CheckHashes && IsFirstRound && CurrentHash < HashBufferSize)
-						setHash(SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
-
-					for (SizeType i = 1, end = l.getCount(); i < end; i++)
+					if (CheckHashes && iteration == 0 && IsFirstRound)
 					{
-						FLAT_ASSERT(l.depths[i] > 0);
-						Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
-						resultTransforms.pushBack(myTransform);
-						tempBuffer[l.depths[i]] = myTransform;
+						ScopedProfiler prof(getStat(StatTransformIt1));
 
-						if (CheckHashes && iteration == 0 && IsFirstRound)
+						resultTransforms.pushBack(l.values[0]);
+						tempBuffer[0] = l.values[0];
+
+						if (CurrentTransform < TransformBufferSize)
+							setTransform(resultTransforms.getBack());
+						if (CurrentHash < HashBufferSize)
+							setHash(SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
+
+						for (SizeType i = 1, end = l.getCount(); i < end; i++)
 						{
-							if (CheckHashes && IsFirstRound && CurrentTransform < TransformBufferSize)
+							FLAT_ASSERT(l.depths[i] > 0);
+							Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
+							resultTransforms.pushBack(myTransform);
+							tempBuffer[l.depths[i]] = myTransform;
+
+							if (CurrentTransform < TransformBufferSize)
 								setTransform(resultTransforms.getBack());
-							if (CheckHashes && IsFirstRound && CurrentHash < HashBufferSize)
+							if (CurrentHash < HashBufferSize)
 								setHash(SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
+						}
+					}
+					else if (iteration == 0 || iteration + 1 < TransformIterations)
+					{
+						// Only log first and last iterations
+
+						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
+
+						resultTransforms.pushBack(l.values[0]);
+						tempBuffer[0] = l.values[0];
+
+						for (SizeType i = 1, end = l.getCount(); i < end; i++)
+						{
+							FLAT_ASSERT(l.depths[i] > 0);
+							Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
+							resultTransforms.pushBack(myTransform);
+							tempBuffer[l.depths[i]] = myTransform;
+						}
+					}
+					else
+					{
+						resultTransforms.pushBack(l.values[0]);
+						tempBuffer[0] = l.values[0];
+
+						for (SizeType i = 1, end = l.getCount(); i < end; i++)
+						{
+							FLAT_ASSERT(l.depths[i] > 0);
+							Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
+							resultTransforms.pushBack(myTransform);
+							tempBuffer[l.depths[i]] = myTransform;
 						}
 					}
 				}
@@ -1318,15 +1351,29 @@ void FLAT_TransformTest()
 template<typename Tree>
 void Other_Tree_TransformTest_Impl()
 {
-	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount * ArrTransformIterationsCount; fullRoundNumber++)
-	{
-		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber / ArrTransformIterationsCount];
-		const SizeType TransformIterations = ArrTransformIterations[fullRoundNumber % ArrTransformIterationsCount];
-		
-		CurrentTreeSize = fullRoundNumber / ArrTransformIterationsCount;
+	FLAT_VECTOR<Transform> resultTransforms;
+	resultTransforms.reserve(ArrTransformTestSizes[ArrTransformTestSizesCount - 1]);
 
-		printf("\nSize:     %u\n", TransformTestSize);
-		printf("Iterations: %u\n", TransformIterations);
+	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount; fullRoundNumber++)
+	{
+
+		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber];
+		const SizeType TransformIterations = 10;
+
+		if (sizeof(Tree) == sizeof(NaiveTree<Transform, TransformSorter>) && TransformTestSize > 10000000)
+			break;
+
+		CurrentTreeSize = fullRoundNumber;
+
+		printf("\n%s tree transform multiplication test\n", sizeof(Tree) == sizeof(NaiveTree<Transform, TransformSorter>) ? "Naive" : "Pooled");
+		printf("/*Node count*/: %u\n", TransformTestSize);
+		//printf("Iterations: %u\n", TransformIterations);
+
+#ifndef _DEBUG
+		const SizeType TransformRoundNumber = ArrTransformRoundNumbers[fullRoundNumber];
+#else
+		const SizeType TransformRoundNumber = 2;
+#endif
 
 		for (SizeType rn = 0; rn < TransformRoundNumber; rn++)
 		{
@@ -1344,29 +1391,29 @@ void Other_Tree_TransformTest_Impl()
 						recurseCheck((const Tree::Node*)node->children[i]);
 					}
 				}
-				static void recurse(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& resultTransforms)
+				static void recurse(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& rt)
 				{
 					Transform myTransform = Transform::multiply(parentTransform, node->value);
-					resultTransforms.pushBack(myTransform);
+					rt.pushBack(myTransform);
 
 					for (SizeType i = 0; i < node->children.getSize(); i++)
 					{
-						recurse((Tree::Node*)node->children[i], myTransform, resultTransforms);
+						recurse((Tree::Node*)node->children[i], myTransform, rt);
 					}
 				}
-				static void recurseChecked(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& resultTransforms)
+				static void recurseChecked(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& rt)
 				{
 					Transform myTransform = Transform::multiply(parentTransform, node->value);
-					resultTransforms.pushBack(myTransform);
+					rt.pushBack(myTransform);
 
 					if (CheckHashes && CurrentTransform < TransformBufferSize)
 						setTransform(myTransform);
 					if (CheckHashes && CurrentHash < HashBufferSize)
-						setHash(SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
+						setHash(SuperFastHash((char*)rt.getPointer(), rt.getSize() * sizeof(Transform)));
 
 					for (SizeType i = 0; i < node->children.getSize(); i++)
 					{
-						recurseChecked((Tree::Node*)node->children[i], myTransform, resultTransforms);
+						recurseChecked((Tree::Node*)node->children[i], myTransform, rt);
 					}
 				}
 			};
@@ -1399,21 +1446,23 @@ void Other_Tree_TransformTest_Impl()
 					Lolmbda::recurseCheck(tree.root);
 			}
 
-			FLAT_VECTOR<Transform> resultTransforms;
-			resultTransforms.reserve(TransformTestSize);
-
 			// Get results
 			{
-
 				for (SizeType iteration = 0; iteration < TransformIterations; iteration++)
 				{
 					resultTransforms.clear();
 
-					ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
-
 					if (CheckHashes && iteration == 0 && IsFirstRound)
 					{
+						ScopedProfiler prof(getStat(StatTransformIt1));
 						Lolmbda::recurseChecked(tree.root, Transform(), resultTransforms);
+					}
+					else if (iteration == 0 || iteration + 1 < TransformIterations)
+					{
+						// Only log first and last iterations
+
+						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
+						Lolmbda::recurse(tree.root, Transform(), resultTransforms);
 					}
 					else
 					{
@@ -1487,19 +1536,41 @@ void test()
 
 	const uint32_t TestMask
 		=
-		//Flat1 |
+		Flat1 |
 		//Flat2 |
 		//Flat3 |
-		//Rival |
+		Rival |
 		//Naive |
-		Flat1Transform |
-		RivalTransform |
-		NaiveTransform |
+		//Flat1Transform |
+		//RivalTransform |
+		//NaiveTransform |
 		//Every |
 #ifdef MAX_PERF
 		Every |
 #endif
 		0;
+
+	ScopedProfiler wholeTestProfiler;
+
+#ifdef MAX_PERF
+	// Get the CPU going
+	{
+		printf("Revving CPU up!\nWR");
+		uint32_t counter = ((uint32_t)(~0)) >> 6;
+		uint64_t& asdf = *(uint64_t*)malloc(sizeof(long));
+		asdf += 1181783497276652981 / 19;
+
+		while (--counter)
+		{
+			Random::init((uint32_t)asdf);
+			asdf *= Random::get(0, (SizeType)asdf) + 1181783497276652981 / 13;
+			if ((counter & (1024 * 1024 * 8 - 1)) == 0)
+				printf("O");
+		}
+		printf("M!\n\n");
+
+	}
+#endif
 
 	memset(LogBuffer, ' ', sizeof(LogBuffer));
 
@@ -1518,7 +1589,7 @@ void test()
 		CheckingHashes = true;
 		CurrentHash = 0;
 		CurrentCounter = 0;
-}
+	}
 
 	// Hot cache
 	if ((TestMask & Flat2) != 0 || (TestMask & Every) != 0)
@@ -1645,70 +1716,93 @@ void test()
 		logTableDouble(maxStat(StatTravelDepth));
 		logTableDouble(avgStat(StatTravelDepth));
 		logTable("\n");
-		logTable("\n");
 	}
 
-	for (SizeType baseOrTransform = 0; baseOrTransform < 2; baseOrTransform++)
+	// Log base stats
+	for (StatNumber stat = StatAdd; stat < StatBaseMax; stat = (StatNumber)((uint32_t)stat + 1))
 	{
-		char buffer[4096];
-
-		bool LogBaseNow = baseOrTransform == 0;
-		if (LogBaseNow)
+		// size 
 		{
-			sprintf_s(buffer, "Tree \tCount \tAdd \tMove \tErase \tFind max depth \tFind count \tNth node \tLeaf travel\n");
-			logTable(buffer);
-		}
-		else
-		{
-			logTable("\nTree \tCount \tDepth average \tAdd \t");
-			for (SizeType i = 0; i < ArrTransformIterationsCount; i++)
+			logTable("\n\tCount\t");
+			for (SizeType treeSize = 0; treeSize < ArrBaseTestSizesCount; treeSize++)
 			{
-				char buffer[64];
-				sprintf_s(buffer, "Iterations: %d\t", ArrTransformIterations[i]);
-				logTable(buffer);
+				CurrentlyTestingTransforms = false;
+				logTableInt(ArrBaseTestSizes[treeSize]);
 			}
 			logTable("\n");
 		}
 
-		for (SizeType treeSize = 0; treeSize < (LogBaseNow ? ArrBaseTestSizesCount : ArrTransformTestSizesCount); treeSize++)
-		{
-			for (SizeType treeType = 0; treeType < (LogBaseNow ? 5U : 3U); treeType++)
-			{
-				const char* treeName
-					= treeType == 0 ? "Flat"
-					: treeType == 1 ? (LogBaseNow ? "Flat Cached" : "Pooled")
-					: treeType == 2 ? (LogBaseNow ? "Flat Cold" : "Naive")
-					: treeType == 3 ? "Pooled"
-					: "Naive";
+		static const char* statNames[] = { "Add", "Erase", "Move", "Nth Node", "Leaf travel", "Find max depth", "Find count", "Traveled depth average", "Travel depth max" };
 
+		logTable(statNames[stat - StatAdd]);
+		logTable("\t");
+
+		for (SizeType treeType = 0; treeType < 5U; treeType++)
+		{
+			static const char* treeNames[] = { "Flat", "Flat cached", "Flat cold", "Pooled", "Naive" };
+			const char* treeName = treeNames[treeType];
+
+			logTable(treeName);
+			logTable("\t");
+
+			for (SizeType treeSize = 0; treeSize < ArrBaseTestSizesCount; treeSize++)
+			{
 				CurrentTreeType = treeType;
 				CurrentTreeSize = treeSize;
-				CurrentlyTestingTransforms = !LogBaseNow;
+				CurrentlyTestingTransforms = false;
 
-				if (LogBaseNow)
-				{
-
-					sprintf_s(buffer, "%s\t%.0lf\t", treeName, maxStat(StatCountMax));
-					logTable(buffer);
-					logTableDouble(avgStat(StatAdd));
-					logTableDouble(avgStat(StatMove));
-					logTableDouble(avgStat(StatErase));
-					logTableDouble(avgStat(StatCalcDepth));
-					logTableDouble(avgStat(StatCalcCount));
-					logTableDouble(avgStat(StatNthNode));
-					logTableDouble(avgStat(StatLeafTravel));
-				}
+				if(stat == StatTravelMax)
+					logTableInt((uint32_t)maxStat(stat));
 				else
-				{
-					FLAT_ASSERT(maxStat(StatCountMax) == avgStat(StatCountAvg));
-					sprintf_s(buffer, "%s \t%.0lf \t%.2lf \t", treeName, maxStat(StatCountMax), avgStat(StatDepthAvg));
-					logTable(buffer);
-					logTableDouble(avgStat(StatAdd));
-					logTableDouble(avgStat(StatTransformIt1));
-					logTableDouble(avgStat(StatTransformIt10));
-				}
-				logTable("\n");
+					logTableDouble(avgStat(stat));
 			}
+			logTable("\n");
+			if (treeType + 1 < 5)
+				logTable("\t");
+		}
+	}
+
+	// size 
+	{
+		logTable("\nTransforms");
+		logTable("\n\tCount\t");
+		for (SizeType treeSize = 0; treeSize < ArrTransformTestSizesCount; treeSize++)
+		{
+			CurrentlyTestingTransforms = true;
+			logTableInt(ArrTransformTestSizes[treeSize]);
+		}
+		logTable("\n");
+	}
+
+	// Log transforms
+	for (StatNumber stat = StatTransformIt1; stat < StatTransformMax; stat = (StatNumber)((uint32_t)stat + 1))
+	{
+		static const char* statNames[] = { "1st iteration", "10th iteration" };
+
+		logTable(statNames[stat - StatTransformIt1]);
+		logTable("\t");
+
+		for (SizeType treeType = 0; treeType < 3U; treeType++)
+		{
+			static const char* treeNames[] = { "Flat", "Pooled", "Naive" };
+
+			logTable(treeNames[treeType]);
+			if (stat == StatTransformIt10)
+				logTable(" 10");
+			logTable("\t");
+
+			for (SizeType treeSize = 0; treeSize < ArrTransformTestSizesCount; treeSize++)
+			{
+				CurrentTreeType = treeType;
+				CurrentTreeSize = treeSize;
+				CurrentlyTestingTransforms = true;
+
+				logTableDouble(avgStat(stat));
+			}
+
+			logTable("\n");
+			if (treeType + 1 < 3)
+				logTable("\t");
 		}
 	}
 
@@ -1733,6 +1827,8 @@ void test()
 		fclose(f);
 	}
 #endif
+
+	printf("\nTest completed in %.2lf seconds.\n\n", wholeTestProfiler.stop() / 1000000.0);
 
 	system("pause");
 }

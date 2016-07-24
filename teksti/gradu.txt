@@ -8,11 +8,17 @@
 
 -- Johdanto
 
-Linked list on hidas. Array on aina parempi vaihtoehto. [lähde?] Tutkin tässä tutkielmassa samaa puurakenteille.
+Linkitetty lista on lähes aina taulukkoa (englanniksi array) tehottomampi. [lähde: never-linked-list] 
 
-!!Ei binääripuu vaan vapaa määrä lapsia.!!
+Keskusmuistista datan noutaminen kestää satoja kertoja pidempään kuin prosessorin nopeasta välimuistista. [lähde: 10-million] Koska linkitetty lista ei ota kantaa muistin sijoitteluun päätyy sen data mahdollisesti pitkin poikin muistia. Tällöin tietokone ei voi hyödyntää leveää muistikaistaansa monen listasolmun noutamiseen kerralla keskusmuistista, vaan ne on noudettava yksi kerrallaan.
 
-Toisin kuin pointteripuussa ehdottamassani tietorakenteessa (tästedes taulukkopuu) solmut ovat yksiulotteisessa taulukossa. Hyötykuorman lisäksi ainoa tarvittava lisätieto on solmon syvyys. Solmut ovat järjestetty niin, että solmun perilliset ovat taulukossa välittömästi vanhempansa jälkeen. Kaavio [AsciiArt]
+Useimmat puurakenteet käyttävät linkitetyn listan kaltaista tapaa yhdistää solmut toisiinsa pointtereilla. [lähde? wikipedia?] Tässä tutkielmassa pyrin näyttämään, että pointtereista koostuva puurakentee on päihitettävissä taulukkomuotoisella tietorakenteella. 
+
+Puurakenteilla, joissa solmuilla on vakio määrä lapsisolmuja (esimerkiksi binääripuu, quadtree, octree), voidaan tunnetusti käyttää taulukkoa datan säilömiseen. Tällöin data on esimerkiksi binääripuun tapauksessa yleensä järjestetty niin, että indeksissä i olevan solmun lapset ovat indekseissä i*2+1 ja i*2+2.
+
+Käsittelemäni puurakenne (tästedes taulukkopuu) ei aseta rajaa solmun lasten määrälle.
+
+Toisin kuin pointteripuussa taulukkopuussa solmut ovat yksiulotteisessa taulukossa. Solmut ovat järjestetty niin, että solmun perilliset ovat taulukossa välittömästi vanhempansa jälkeen kuten kaaviosta [AsciiArt] on nähtävissä. Järjestetyn hyötykuorman lisäksi ainoa tarvittava lisätieto on solmun syvyys.
 
 <kuva>
 ASCII ART PUUN RAKENTEESTA KUVANA
@@ -52,11 +58,11 @@ struct ArrayTree
 Kaavio structArrayTree. ehdotettu muistirakenne C++:n kaltaisella kiellellä
 
 
-Taulukkopuussa arvojen lisäksi tallennamme toiseen taulukkoon numerona tiedon siitä, kuinka syvällä puussa kyseinen solmu on. Tietorakenteen topologia sisältää implisiittisesti kaiken muun tiedon vanhemmuus- ja sisaruussuhteista.
+Taulukkopuussa hyötykuorman lisäksi tallennamme toiseen taulukkoon numerona tiedon siitä, kuinka syvällä puussa kyseinen solmu on. Tietorakenteen topologia sisältää implisiittisesti kaiken muun tiedon vanhemmuus- ja sisaruussuhteista. Sääntönä taulukkopuun sisäiselle järjestykselle on, että jokaisen solmun jälkeläisten on oltavata taulukossa heti itse solmun jälkeen. Tällä saadaan aikaan se, että jokaisen solmun kannalta muut oleelliset solmut ovat muistissa tämän välittömässä läheisyydessä.
 
 Koska syvyysarvot ovat tiiviissä taulukossa, voidaan esimerkiksi maksimisyvyyden hakemisessa hyödyntää rinnakkaisia SIMD-operaatioita, mikä nopeuttaa taulukon läpikäymistä huomattavasti. Testieni mukaan SIMD-toteutus suoriutuu maksimin hakemisesta kymmenesosassa tavallisen luupin suoritusajasta.
 
-Huonona puolena taulukkopuun kannalta, jokainen sille suoritettu muokkausoperaatio on suoritettava siirtelemällä toisinaan isojakin muistikönttejä. Hypoteesini kuitenkin on, että cache-ystävällisyytensä ansiosta taulukkopuu on silti tehokkaampi kuin pointteri puu, muuten paitsi aivan äärimmäisillä puu koilla. Suorituskykytestini osoittavat, että tämä pitäisi myös paikkansa.
+Huonona puolena taulukkopuun kannalta, jokainen sille suoritettu muokkausoperaatio on suoritettava siirtelemällä toisinaan isojakin muistikönttejä. Hypoteesini kuitenkin on, että cache-ystävällisyytensä ansiosta taulukkopuu on silti nopeampi kaikessa toiminnaassaan kuin pointteri puu, muuten paitsi aivan äärimmäisillä puu koilla. Suorituskykytestini osoittavat, että tämä pitäisi myös paikkansa.
 
 Hyvänä puolena taulukkopuun suora läpikäyminen kulkee puun solmut syvyys-ensin järjestyksesä (depth-first). Tämä on hyödyllistä, koska monissa käyttötarkoituksissa puuta käydään läpi juuri tässä järjestyksesä. Esimerkiksi käyttöliittymäohjelmoinnissa widgettien ladonta, käyttäjän syötteen välitys ja piirto voidaan kaikki tehdä tässä järjestyksessä.
 
@@ -184,6 +190,9 @@ Mielenkiinnon vuoksi testeissä otetaan myös talteen pointteripuiden solmujen h
 
 
 
+Tulokset
+
+Kuten arveli
 
 
 
@@ -196,12 +205,15 @@ Mielenkiinnon vuoksi testeissä otetaan myös talteen pointteripuiden solmujen h
 
 
 
+Lähteet
 
+[bloom] 1. Jih-Kwon Peir, Shih-Chang Lai, Shih-Lien Lu, Jared Stark, Konrad Lai - 2002 - Bloom filtering cache misses for accurate data speculation and prefetching
 
+[pointer-chasing] 2. Gabriel Weisz, Joseph Melber, Yu Wang, Kermin Fleming, Eriko Nurvitadhi, and James C. Hoe - 2016 - A Study of Pointer-Chasing Performance on Shared-Memory Processor-FPGA Systems
 
+[prefetching] 3. Amir Roth, Gurindar S. Sohi - ‎1999 - Effective Jump-Pointer Prefetching for Linked Data Structures
 
+[never-linked-list] 4. Kjellkod's Blog - 2012 - Number crunching: Why you should never, ever, EVER use linked-list in your code again - https://kjellkod.wordpress.com/2012/02/25/why-you-should-never-ever-ever-use-linked-list-in-your-code-again/ [2016-07-24]
 
-
-
-
+[10-million] 5. Todd Hoff - 2013 - The Secret to 10 Million Concurrent Connections - http://highscalability.com/blog/2013/5/13/the-secret-to-10-million-concurrent-connections-the-kernel-i.html [2016-07-24]
 
