@@ -1,0 +1,222 @@
+
+
+
+
+
+johdanto
+
+Pointtereita käyttävät tietorakenteet ovat teoreettisesti tehokkaita, koska niiden rakennetta muutettaessa tarvitsee vain käsitellä pointtereita suurimman osan datasta pysyessä paikallaan. Käytännössä kuitenkin pointerien jahtauksen (englanniksi pointer chasing) aiheuttamat muistihudit (englanniksi cache-miss) ja väliinpitämätön suhtautuminen muistin sijoitteluun tekevät niistä yleisesti tehottomampia kuin taulukkoihin pohjautuvat tietorakenteet.
+
+Keskusmuistiväylän ja prosessorin välimuistin tehokkaalla hyödyntämisellä on suuri merkitys ohjelmien suorituskykyyn, sillä keskusmuistista datan noutaminen on satoja kertoja hitaampaa kuin prosessorin välimuistista. [lähde: 10-million]
+
+Erityisesti linkitetty lista on tunnettu huonosta suorituskyvystä tilanteissa, joissa sen teoreettisesti kuuluisi olla taulukkoa tehokkaampi. Linkitetyn listan solmuilla ei ole takeita siitä, että seuraava solmun löytyy suorittimen välimuistista, mikä aiheuttaa helposti muistihuteja. [lähde: never-linked-list]
+
+Linkitetyn listan suorituskykyä on mahdollista parantaa pakkaamalla sen solmut tiiviiseen taulukkoon, jolloin se on noudettavissa keskusmuistista vähemmissä osissa. Mutta tällöinkin solmut voivat olla epäjärjestyksessä muistissa, eikä niiden käsittelyyn voida siis hyödyntää prosessorien SIMD-rinnakkaislaskentaominaisuuksia.
+
+Toisin kuin yksittäiset solmuoliot taulukkomuotoinen data on noudettavissa keskusmuistista optimaalisesti muistiväylän levyisinä köntteinä. Solmujen kannalta muut relevantit solmut ovat muistissa sen välittömässä läheisyydessä. Lisäksi taulukoille on mahdollista hyödyntää SIMD-laskentaa.
+
+((Nopeakaan algoritmi ei pysty kompensoimaan tehottoman muistirakenteen aiheuttamia muistihuteja. Ohjelmointikielten kääntäjät eivät myöskään manipuloi ohjelmoijan luomia muistirakenteita tehokkaammiksi.))
+
+Puurakenteille pointteripohjainen toteutus on yleinen, koska puissa yleensä liikutaan vain juurisolmusta lehtisolmuun, mikä ei edellytä yhtä monen pointterin läpi kulkemista kuin linkitetty lista. Silti käyttökohteissa, joissa puuta muutetaan harvoin mutta käydään läpi usein, vähäinenkin määrä pointtereiden jahtaamista on tarpeetonta ja joskus myös ratkaiseva pullon kaula.
+
+Tässä tutkielmassa esittelen taulukkopohjaista puurakennetta, jossa jokaisella solmulla voi olla rajantonta määrää lapsisolmuja. Tyypillisesti taulukkopohjainen puu on topologialtaan rajoitettu kahteen, neljään tai kahdeksaan lapsisolmuun. Esimerkiksi binääripuussa indeksissä i olevan solmun lapset olisivat indekseissä i*2+1 ja i*2+2.
+
+Toisin kuin taulukkopohjainen binääripuu, vapaamuotoinen taulukkopuu ei voi välittää kaikkea tarvittavaa tietoa solmujensa vanhemmuussuhteista pelkällä järjestyksellä. Tarvitaan myös jotain lisätietoa, josta on pääteltävissä, mitkä solmut ovat minkäkin solmun lapsia. Esitellyn tietorakenteen tapauksessa tämä lisätieto on solmun syvyys puurakenteen sisällä. Vaihtoehtoisesti lisätieto voisi olla solmun vanhemman indeksi, jolloin puussa olisi helppo kulkea takaperin lehdestä juureen päin. Syvyyden käyttämisellä on kuitenkin omat etunsa kuten solmujen sisaruussuhteiden nopea selvittäminen, erittäin nopea maksimisyvyyden hakeminen ja hakutaulukkojen (englanniksi lookup table) luomisen tehokkuus, mitä käsitellään tarkemmin luvussa [HAKUTAULUKOT].
+
+Taulukkopuu
+
+Esiteltävän taulukkopohjaisen puun solmut on oltava järjestetty niin, että jokaisen solmun jälkeläissolmut (lapset, lapsen lapset, jne.), on oltava taulukossa välittömästi itse solmun jälkeen. Tästä seuraa, että kaavion [kaavio: puugraafi] esittämä puu olisi muistissa kaavion [kaavio: puurakenne] esittämässä järjestyksessä.
+
+<kuva puuragraafista>
+Kaavio puugraafi. Puurakenne sen luonnollisessa olomuodossa.
+
+<kuva puurakenteesta>
+Kaavio puurakenne. Puurakenne järjestettynä siten kuin se esiintyy muistissa taulukkopuussa.
+
+<lähdekoodi>
+struct ArrayTree
+{
+	ArrayOfPayload payload;
+	ArrayOfIntegers depths;
+};
+</lähdekoodi>
+Kaavio structArrayTree. Taulukkomuotoisen puun muistirakenne C++-kielellä toteutettuna. Payload kuvastaa käyttäjän määrittelemää tietotyyppiä.
+
+
+
+Taulukkopuussa ei ole minkäänlaista solmuolioita, vaan indeksi joka määrittää sekä arvon että syvyyden kahdessa erissä mutta toisiaan vastaavassa taulukossa kaavion [structArrayTree] mukaan. Siinä ei eksplisiittisesti ole tietoa solmujen sukulaisuuksista, vaan ne on pääteltävä syvyystiedosta. Esimerkiksi:
+* solmun vanhempi on taulukossa edellinen sitä pienemmän syvyyden omaava solmu,
+* solmun seuraava sisar on seuraava saman syvyyden omaava solmu, ja 
+* solmun viimeinen jälkeläinen on viimeinen ennen seuraavaa solmun syvyydellä tai alempana olevaa solmua.
+
+Taulukkopuu mahdollistaa läpikäytäessä keskusmuistin muistiväylän tehokkaan hyödyntämisen. Erityisesti syvyyshaku on erityisen tehokas taulukkopohjaisella puulla, koska se on vain lineaarinen läpikäyminen. 
+
+Kaavion [kaavio: structPointerTree] mukainen pointteripuu sisältää hyötykuorman lisäksi paljon ylimääräistä dataa. Vaikka puu olisi pakattu taulukkoon paremman cache-paikallisuuden takaamiseksi, jokaisessa muistiväylällisessä olisi silti iso osa ei-haluttua dataa - riippumatta mitä solmuoliolla haluaa tehdä.
+
+<lähdekoodi>
+struct Node
+{
+	Payload         payload;
+	Pointer         parent;
+	ArrayOfPointers children;
+};
+struct PointerTree
+{
+	Node root;
+};
+</lähdekoodi>
+Kaavio structPointerTree. Perinteinen pointtereista koostuva puu C++-kielellä toteutettuna. Joissain toteutuksissa pointteripuun solmussa on pointterit vanhemman ja lasten lisäksi myös sisarsolmuihin. Payload kuvastaa käyttäjän määrittelemää tietotyyppiä.
+
+
+
+
+
+--Lisäys, poisto ja siirto operaatiot
+
+Niissä pitää memmovettaa kamaa.
+
+Jos on iso chunkki, tarvitsee joskus myös dynaamisesti varata muistia, ettei stack overflowaa.
+
+Koodiesimerkkejä.
+
+
+
+
+
+
+--Syvyys, etsintä ja leaf travel
+
+
+
+
+
+--Transform2D esimerkki
+
+
+
+
+
+
+
+--Cache rakenteet
+
+Koska taulukkopuu on pohjimmiltaan vain taulukkomuotoista dataa, on siitä helppo tehdä cache-rakenteita, jotka auttavat sitä suoritumaan joissain tehtävissä nopeammin. Esimerkiksi cache-rakenne, jossa on samalla indeksillä kuin varsinaisessa taulukkopuussa solmun seuraavan sisarsolmun indeksi.
+
+Cache-rakenteita on myös tehokas koota, käymällä taulukkopuu läpi takaperin ja tallentamalla kunkin syvyyden edellisen solmun numero tilapäiseen taulukkoon. Tämä arvo voidaan sitten sijottaa cache-rakenteeseen seuraavan solmun kohdalle. Tätä havainnollistetaan kaaviossa [makeCache].
+
+
+<lähdekoodi>
+void makeCache(NextSiblingCache cache, ArrayTree tree)
+{
+	// Taulukko jossa tilapäisesti säilytetään
+	// jokaisen syvyyden edellisen solmun indeksi
+	Array<Integer> previous;
+	
+	// Varaa tilaa taulukkoon jokaiselle syvyydelle
+	// ja alusta taulukon jokainen arvo InvalidIndexiksi
+	resize(previous, getDepth(tree));
+	setValues(previous, InvalidIndex);
+	
+	Integer previousDepth = 0;
+	
+	// Käy taulukkopuu läpi takaperin tallentaen cacheen
+	// edellisen sisaren arvo.
+	for(Integer i = count; i-- > 0; )
+	{
+		// Tallenna edellinen samalla syvyydellä oleva solmu
+		Integer depth = tree.depths[i];
+		c[i] = previous[depth];
+		previous[depth] = i;
+		
+		// Jos syvyys vähenee, edellinen arvo ei voi olla
+		// enää kenenkään sisarsolmu.
+		if(depth < previousDepth)
+			previous[previousDepth] = InvalidIndex;
+		previousDepth = depth;
+	}
+}
+</lähdekoodi>
+Kaavio makeCache. Esimerkki cache-rakenteen kokoamisesta. Tämä on mahdollista toteuttaa ilman dynaamista muistin varausta käymällä taulukkopuu läpi syvyyden mukaan osiin jaettuna.
+
+
+
+
+
+Testausmetodologia
+
+Toteutin sekä taulukkopuun että perinteisen pointteripuun, ja niiden muokkaukseen vaadittavat algoritmit C++:lla.
+
+Kirjoitin testauskoodin, joka kasaa topologisesti identtiset puurakenteet kaikilla eri kokoonpanoilla.
+
+* Taulukkopuu
+* Taulukkopuu + cache
+* Taulukkopuu + cache joka pitää joka kerta alustaa uusiksi
+* Pointteripuu
+* Pointteripuu jonka solmut varataan poolista
+
+Testit ajetaan useilla eri määrillä solmuja, jotka vaihtelevat kymmenestä 300 000:een.
+
+Jokaista testiä toistetaan useita kertoja, jotta satunnaiset suorituskykyheilahtelut saadaan suodatettua mahdollisimman tehokkaasti pois.
+
+Käsiteltävien solmujen yhtenäisyyden säilyttämiseksi eri puissa, pointteripuussa haetaan relevantit solmut syvyys-ensin järjestyksessä (samassa johon taulukkopuu on järjestetty). Tämä hidastaa pointteripuu testejä yleisesti, mutta sen ei pitäisi vaikuta mittaustuloksiin koska ajastukset tehdään jokaiselle operaatiolla yksittäin kuten kaaviossa [testMove] näytetään. Tämä saattaa vaikuttaa testaustuloksiin positiivisesti, koska pointteripuun solmuja on jo valmiiksi prosessorin välimuistissa, kun testi alkaa.
+
+
+<lähdekoodi>
+void testMove(Integer childIndex, Integer parentIndex)
+{
+	// Valmistele testi
+	PointerTreeNode* child  = getNthDescendant(tree.root, childIndex);
+	PointerTreeNode* parent = getNthDescendant(tree.root, parentIndex);
+	
+	Time duration;
+	
+	// Tee testi
+	{
+		Time start = getPreciseTime();
+		moveToParent(child, parent);
+		Time end = getPreciseTime();
+		duration = end - start;
+	}
+}
+</lähdekoodi>
+Kaavio testMove. Esimerkki testin toteutuksesta. Lapsisolmujen hakemiseen kuluva aika ei ole mukana testin suoritukseen laskettavassa ajassa.
+
+Mielenkiinnon vuoksi testeissä otetaan myös talteen pointteripuiden solmujen hakemiseen kuluva aika. Periaatteessa tähän kuluva suoritusaika on O-notaatiolla ilmaistuna O(N), mutta koska jokainen pointterin hakeminen voi mahdollisesti aiheuttaa muistihudin, on N:n kerroin erittäin suuri.
+
+
+
+
+
+Tulokset
+
+Taulukkopuu 
+
+
+
+
+
+
+
+
+
+
+
+
+Lähteet
+
+[bloom] 1. Jih-Kwon Peir, Shih-Chang Lai, Shih-Lien Lu, Jared Stark, Konrad Lai - 2002 - Bloom filtering cache misses for accurate data speculation and prefetching
+
+[pointer-chasing] 2. Gabriel Weisz, Joseph Melber, Yu Wang, Kermin Fleming, Eriko Nurvitadhi, and James C. Hoe - 2016 - A Study of Pointer-Chasing Performance on Shared-Memory Processor-FPGA Systems
+
+[prefetching] 3. Amir Roth, Gurindar S. Sohi - ‎1999 - Effective Jump-Pointer Prefetching for Linked Data Structures
+
+[never-linked-list] 4. Kjellkod's Blog - 2012 - Number crunching: Why you should never, ever, EVER use linked-list in your code again - https://kjellkod.wordpress.com/2012/02/25/why-you-should-never-ever-ever-use-linked-list-in-your-code-again/ [2016-07-24]
+
+[10-million] 5. Todd Hoff - 2013 - The Secret to 10 Million Concurrent Connections - http://highscalability.com/blog/2013/5/13/the-secret-to-10-million-concurrent-connections-the-kernel-i.html [2016-07-24]
+
+
+
+
+
+
+
