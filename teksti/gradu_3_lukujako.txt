@@ -1,0 +1,58 @@
+
+
+Johdanto
+* linked list hidas, array nopea
+* muistiväylän leveys
+* muistia on, mutta cpu cache yhä pieni
+* puut käyttää pointtereita
+* binääripuu on toki, mutta tässäpä on lapsia rajattomasti
+* käyttökohde: GUI
+
+
+Pointteripuu
+
+* Koostumus
+
+* Kokoaminen
+
+* Muokkaus
+
+* Hakeminen
+** Root -> leaf
+** depth first
+** max depth
+** count
+
+
+Taulukkopuu
+
+* Koostumus
+
+* Kokoaminen
+
+* Muokkaaminen
+
+* Lookup tablet
+** Luominen
+** Päivittäminen
+((** Käyttö))
+
+* Hakeminen
+** Root -> leaf
+** depth first
+** max depth
+** count
+
+
+
+
+Testausmetodologia
+
+
+
+Tulokset
+
+
+
+Yhteenveto
+* käyttökohde: GUI

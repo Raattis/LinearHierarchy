@@ -420,3 +420,6 @@ paket-files/
 *.sln.iml
 LinearHierarchy/output.csv
 *.ods#
+*.tlog
+PerfomanceTest/LinearHierarchy.iobj
+*.ipdb

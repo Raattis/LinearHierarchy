@@ -19,10 +19,10 @@
 typedef uint32_t SizeType;
 
 #ifdef _DEBUG
-const SizeType ArrBaseTestSizesCount = 2;
+const SizeType ArrBaseTestSizesCount = 5;
 const SizeType ArrTransformTestSizesCount = 6;
 
-const SizeType DebugBaseTestRoundNumber = 3;
+const SizeType DebugBaseTestRoundNumber = 10;
 
 #elif defined(MAX_PERF)
 const SizeType ArrBaseTestSizesCount = 10;
@@ -447,7 +447,7 @@ struct Random
 	static const uint32_t InitSeed = 1771551;
 	static uint32_t random;
 	static uint32_t counter;
-	uint64_t x; /* The state must be seeded with a nonzero value. */
+	uint64_t x; // The state must be seeded with a nonzero value.
 
 	static uint64_t randomState[2];
 
@@ -1366,7 +1366,7 @@ void Other_Tree_TransformTest_Impl()
 		CurrentTreeSize = fullRoundNumber;
 
 		printf("\n%s tree transform multiplication test\n", sizeof(Tree) == sizeof(NaiveTree<Transform, TransformSorter>) ? "Naive" : "Pooled");
-		printf("/*Node count*/: %u\n", TransformTestSize);
+		printf("Node count: %u\n", TransformTestSize);
 		//printf("Iterations: %u\n", TransformIterations);
 
 #ifndef _DEBUG
@@ -1536,7 +1536,7 @@ void test()
 
 	const uint32_t TestMask
 		=
-		Flat1 |
+		//Flat1 |
 		//Flat2 |
 		//Flat3 |
 		Rival |

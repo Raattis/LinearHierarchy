@@ -316,9 +316,9 @@ struct RivalTree
 	{
 		if (!firstUnusedNode)
 		{
-			treeNodeBuffers.pushBack(new FLAT_VECTOR<Node>());
+			const SizeType BufferSize = (treeNodeBuffers.getSize() <= 25) ? (64 << treeNodeBuffers.getSize()) : (0xFFFFFFFF);
 
-			static const SizeType BufferSize = 32 * 1024 / sizeof(Node) < 4 ? 4 : 32 * 1024 / sizeof(Node);
+			treeNodeBuffers.pushBack(new FLAT_VECTOR<Node>());
 
 			treeNodeBuffers.getBack()->resize(BufferSize);
 			for (SizeType i = treeNodeBuffers.getBack()->getSize(); i-- > 0; )
@@ -337,6 +337,7 @@ struct RivalTree
 		connectToParent<Sorter, Node>(node, parent);
 		return node;
 	}
+
 	void eraseNode(RivalTreeNodeBase* node)
 	{
 		FLAT_ASSERT(node);

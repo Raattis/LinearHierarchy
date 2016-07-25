@@ -142,7 +142,14 @@ Kaavio makeCache. Esimerkki cache-rakenteen kokoamisesta. Tämä on mahdollista 
 
 
 
-Testausmetodologia
+
+
+
+
+
+
+
+--Testausmetodologia
 
 Toteutin sekä taulukkopuun että perinteisen pointteripuun, ja niiden muokkaukseen vaadittavat algoritmit C++:lla.
 
@@ -187,7 +194,10 @@ Mielenkiinnon vuoksi testeissä otetaan myös talteen pointteripuiden solmujen h
 
 
 
-Tulokset
+
+
+
+--Tulokset
 
 Taulukkopuu 
 
