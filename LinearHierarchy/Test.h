@@ -34,22 +34,56 @@ const SizeType ArrTransformTestSizesCount = 12;
 #endif
 
 const SizeType ArrBaseTestSizes[] =        { 10,     50,    100,   200,   500,  1000, 2000, 5000, 10000, 20000 };
-const SizeType ArrBaseTestRoundNumbers[] = { 50000,  20000, 5000,  2000,  1000, 500,  100,  10,   3,     3 };
+//const SizeType ArrBaseTestRoundNumbers[] = { 50000,  20000, 5000,  2000,  1000, 500,  100,  10,   3,     3 };
+const SizeType ArrBaseTestRoundNumbers[] = { 1000,  500, 500,  500,  100, 100,  30,  10,  5,     3 };
+//const SizeType ArrBaseTestRoundNumbers[] = { 200,  50, 20,  10,  10, 10,  10,  5,   3,     3 };
 
 const SizeType ArrTransformTestSizes[]    = { 10,     20,   50,    100,   200,  500,   1000, 1500, 2000, 2500, 3000, 3500 };
-const SizeType ArrTransformRoundNumbers[] = { 10000,  5000, 2000,  1000,  1000, 1000,  500,  300,  100,  50,   50,   50 };
+//const SizeType ArrTransformRoundNumbers[] = { 10000,  5000, 2000,  1000,  1000, 1000,  500,  300,  100,  50,   50,   50 };
+const SizeType ArrTransformRoundNumbers[] = { 1000,  1000, 500,  200,  200, 100,  100,  100,  50,  50,   50,   50 };
+//const SizeType ArrTransformRoundNumbers[] = { 100,  50, 20,  10,  10, 10,  5,  5,  5,  5,   5,   5 };
 
 #ifdef MAX_PERF
+const bool DoCacheFlushing = true;
 const bool VerbosePrinting = false;
 const bool CheckHashes = false;
 const bool CheckCounts = false;
 #else
+const bool DoCacheFlushing = false;
 const bool VerbosePrinting = false;
 const bool CheckHashes = true;
 const bool CheckCounts = true;
 #endif
 
-SizeType Rundi = 0;
+
+enum
+{
+	Flat1 = 1 << 0,
+	Flat2 = 1 << 1,
+	Flat3 = 1 << 2,
+	Rival = 1 << 3,
+	Naive = 1 << 4,
+	Flat1Transform = 1 << 5,
+	RivalTransform = 1 << 6,
+	NaiveTransform = 1 << 7,
+	Every = 1 << 8
+	};
+
+const uint32_t TestMask
+	=
+	//Flat1 |
+	//Flat2 |
+	//Flat3 |
+	//Rival |
+	Naive |
+	//Flat1Transform |
+	//RivalTransform |
+	//NaiveTransform |
+	//Every |
+#ifdef MAX_PERF
+	Every |
+#endif
+	0;
 
 #if false
 #define FLAT_NO_CACHE_CONDITION     (Random::random % 8 <= 3)
@@ -64,6 +98,8 @@ SizeType Rundi = 0;
 #define FLAT_CACHE_CONDITION        (Rundi == 1)
 #define FLAT_CACHE_UNPREP_CONDITION (Rundi == 2)
 #endif
+
+SizeType Rundi = 0;
 
 struct Handle
 {
@@ -407,6 +443,7 @@ namespace
 	}
 }
 
+
 class ScopedProfiler
 {
 public:
@@ -416,6 +453,22 @@ public:
 	ScopedProfiler(double* cumulator = NULL)
 		: cumulator(cumulator)
 	{
+	if (DoCacheFlushing)
+	{
+		//ScopedProfiler sdf(0, true);
+		pingMemory();
+		//printf("%.0lf\n", sdf.stop());
+	}
+
+		QueryPerformanceCounter(&start);
+	}
+
+	ScopedProfiler(double* cumulator, bool dontFlush)
+		: cumulator(cumulator)
+	{
+		if(DoCacheFlushing && !dontFlush)
+			flushCache();
+
 		QueryPerformanceCounter(&start);
 	}
 
@@ -512,6 +565,7 @@ void baseTestEndPrints(double diff)
 
 	printf("\n");
 }
+
 
 
 void FLAT_Test()
@@ -1285,7 +1339,7 @@ void FLAT_TransformTest()
 					{
 						// Only log first and last iterations
 
-						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
+						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10), iteration != 0);
 
 						resultTransforms.pushBack(l.values[0]);
 						tempBuffer[0] = l.values[0];
@@ -1461,7 +1515,7 @@ void Other_Tree_TransformTest_Impl()
 					{
 						// Only log first and last iterations
 
-						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
+						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10), iteration != 0);
 						Lolmbda::recurse(tree.root, Transform(), resultTransforms);
 					}
 					else
@@ -1521,35 +1575,6 @@ void NAIVE_TransformTest()
 
 void test()
 {
-	enum
-	{
-		Flat1 = 1 << 0,
-		Flat2 = 1 << 1,
-		Flat3 = 1 << 2,
-		Rival = 1 << 3,
-		Naive = 1 << 4,
-		Flat1Transform = 1 << 5,
-		RivalTransform = 1 << 6,
-		NaiveTransform = 1 << 7,
-		Every = 1 << 8
-	};
-
-	const uint32_t TestMask
-		=
-		//Flat1 |
-		//Flat2 |
-		//Flat3 |
-		Rival |
-		//Naive |
-		//Flat1Transform |
-		//RivalTransform |
-		//NaiveTransform |
-		//Every |
-#ifdef MAX_PERF
-		Every |
-#endif
-		0;
-
 	ScopedProfiler wholeTestProfiler;
 
 #ifdef MAX_PERF
@@ -1577,128 +1602,134 @@ void test()
 	uint32_t seed = 1771551 * (SizeType)time(NULL);
 	seed = 1771551;
 
-	// Flat
-	if ((TestMask & Flat1) != 0 || (TestMask & Every) != 0)
+	try
 	{
-		Rundi = 0;
-		CurrentTreeType = 0;
+		// Flat
+		if ((TestMask & Flat1) != 0 || (TestMask & Every) != 0)
+		{
+			Rundi = 0;
+			CurrentTreeType = 0;
 
-		printf("\nFlat Tree\n");
-		Random::init(seed);
-		FLAT_Test();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
+			printf("\nFlat Tree\n");
+			Random::init(seed);
+			FLAT_Test();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+		}
+
+		// Hot cache
+		if ((TestMask & Flat2) != 0 || (TestMask & Every) != 0)
+		{
+			Rundi = 1;
+			CurrentTreeType = 1;
+
+			Random::init(seed);
+			FLAT_Test();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+		}
+
+		// Cold cache
+		if ((TestMask & Flat3) != 0 || (TestMask & Every) != 0)
+		{
+			Rundi = 2;
+			CurrentTreeType = 2;
+
+			printf("\nFlat Tree With Cold Cache\n");
+			Random::init(seed);
+			FLAT_Test();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+		}
+
+		// Naive tree
+		if ((TestMask & Naive) != 0 || (TestMask & Every) != 0)
+		{
+			CurrentTreeType = 3;
+
+			printf("\nNaive Tree\n");
+			Random::init(seed);
+			NAIVE_Test();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+		}
+
+		// Rival tree
+		if ((TestMask & Rival) != 0 || (TestMask & Every) != 0)
+		{
+			CurrentTreeType = 4;
+
+			printf("\nBuffered Tree\n");
+			Random::init(seed);
+			RIVAL_Test();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+		}
+
+
+
+		//
+		// Transform tests
+		//
+
+		CurrentlyTestingTransforms = true;
+
+		// Reset hashing for Transform test
+		CheckingHashes = false;
+
+		// Flat Transform
+		if ((TestMask & Flat1Transform) != 0 || (TestMask & Every) != 0)
+		{
+			printf("\nFlat Transform\n");
+
+			CurrentTreeType = 0;
+			Rundi = 0;
+			Random::init(seed);
+			FLAT_TransformTest();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+			CurrentTransform = 0;
+		}
+
+		// Rival Transform
+		if ((TestMask & RivalTransform) != 0 || (TestMask & Every) != 0)
+		{
+			printf("\nBuffered Tree Transform\n");
+
+			Rundi = 0;
+			CurrentTreeType = 1;
+
+			Random::init(seed);
+			RIVAL_TransformTest();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+			CurrentTransform = 0;
+		}
+		// Naive Transform
+		if ((TestMask & NaiveTransform) != 0 || (TestMask & Every) != 0)
+		{
+			printf("\nNaive Tree Transform\n");
+
+			Rundi = 0;
+			CurrentTreeType = 2;
+
+			Random::init(seed);
+			NAIVE_TransformTest();
+			CheckingHashes = true;
+			CurrentHash = 0;
+			CurrentCounter = 0;
+			CurrentTransform = 0;
+		}
 	}
-
-	// Hot cache
-	if ((TestMask & Flat2) != 0 || (TestMask & Every) != 0)
+	catch (...)
 	{
-		Rundi = 1;
-		CurrentTreeType = 1;
-
-		Random::init(seed);
-		FLAT_Test();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-	}
-
-	// Cold cache
-	if ((TestMask & Flat3) != 0 || (TestMask & Every) != 0)
-	{
-		Rundi = 2;
-		CurrentTreeType = 2;
-
-		printf("\nFlat Tree With Cold Cache\n");
-		Random::init(seed);
-		FLAT_Test();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-	}
-
-	// Naive tree
-	if ((TestMask & Naive) != 0 || (TestMask & Every) != 0)
-	{
-		CurrentTreeType = 3;
-
-		printf("\nNaive Tree\n");
-		Random::init(seed);
-		NAIVE_Test();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-	}
-
-	// Rival tree
-	if ((TestMask & Rival) != 0 || (TestMask & Every) != 0)
-	{
-		CurrentTreeType = 4;
-
-		printf("\nBuffered Tree\n");
-		Random::init(seed);
-		RIVAL_Test();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-	}
-
-
-
-	//
-	// Transform tests
-	//
-
-	CurrentlyTestingTransforms = true;
-
-	// Reset hashing for Transform test
-	CheckingHashes = false;
-
-	// Flat Transform
-	if ((TestMask & Flat1Transform) != 0 || (TestMask & Every) != 0)
-	{
-		printf("\nFlat Transform\n");
-
-		CurrentTreeType = 0;
-		Rundi = 0;
-		Random::init(seed);
-		FLAT_TransformTest();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-		CurrentTransform = 0;
-	}
-
-	// Rival Transform
-	if ((TestMask & RivalTransform) != 0 || (TestMask & Every) != 0)
-	{
-		printf("\nBuffered Tree Transform\n");
-
-		Rundi = 0;
-		CurrentTreeType = 1;
-
-		Random::init(seed);
-		RIVAL_TransformTest();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-		CurrentTransform = 0;
-	}
-	// Naive Transform
-	if ((TestMask & NaiveTransform) != 0 || (TestMask & Every) != 0)
-	{
-		printf("\nNaive Tree Transform\n");
-
-		Rundi = 0;
-		CurrentTreeType = 2;
-
-		Random::init(seed);
-		NAIVE_TransformTest();
-		CheckingHashes = true;
-		CurrentHash = 0;
-		CurrentCounter = 0;
-		CurrentTransform = 0;
 	}
 	// Print summary about depth and count
 	{
@@ -1739,7 +1770,7 @@ void test()
 
 		for (SizeType treeType = 0; treeType < 5U; treeType++)
 		{
-			static const char* treeNames[] = { "Flat", "Flat cached", "Flat cold", "Pooled", "Naive" };
+			static const char* treeNames[] = { "Flat", "Flat cached", "Flat cold", "Naive", "Pooled" };
 			const char* treeName = treeNames[treeType];
 
 			logTable(treeName);
