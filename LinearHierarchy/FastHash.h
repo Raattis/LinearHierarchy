@@ -3,7 +3,11 @@
 // Credit
 //  http://www.azillionmonkeys.com/qed/hash.html
 
-#include <stdint.h>
+typedef unsigned short uint16_t;
+typedef unsigned long uint32_t;
+static_assert(sizeof(uint16_t) == 2, "uint16_t isn't actually 2 bytes long");
+static_assert(sizeof(uint32_t) == 4, "uint32_t isn't actually 4 bytes long");
+
 #undef get16bits
 #if (defined(__GNUC__) && defined(__i386__)) || defined(__WATCOMC__) \
   || defined(_MSC_VER) || defined (__BORLANDC__) || defined (__TURBOC__)
@@ -19,7 +23,7 @@ uint32_t SuperFastHash(const char * data, int len) {
 	uint32_t hash = len, tmp;
 	int rem;
 
-	if (len <= 0 || data == NULL) return 0;
+	if (len <= 0 || data == nullptr) return 0;
 
 	rem = len & 3;
 	len >>= 2;

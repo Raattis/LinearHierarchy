@@ -18,6 +18,11 @@
 	#endif
 #endif
 
+#ifndef FLAT_MEMSET
+	#include <string.h> /* memset */
+	#define FLAT_MEMSET(dst, value, length) memset(dst, value, length)
+#endif
+
 static uint32_t getNextPowerOfTwo(uint32_t v)
 {
 	FLAT_ASSERT((v & 0x80000000) == 0);
@@ -164,8 +169,8 @@ public:
 
 			if (reserveRows > cacheRows.getSize())
 			{
-				SizeType oldRowCount = cacheRows.getSize();
-				RowIndex targetRowCount = reserveRows + 1024 / reserveColumns;
+				RowIndex oldRowCount = (RowIndex)cacheRows.getSize();
+				RowIndex targetRowCount = reserveRows + (RowIndex)(1024 / reserveColumns);
 				cacheRows.reserve(targetRowCount);
 				buffers.pushBack(Buffer((reserveColumns)* (targetRowCount - cacheRows.getSize())));
 
@@ -213,7 +218,7 @@ public:
 		if (reserveRows > rowCapacity)
 		{
 			rowCapacity = reserveRows;
-			targetRowCount = reserveRows + 1024 / columnCapacity;
+			targetRowCount = (reserveRows + 1024 / columnCapacity) > FLAT_MAXDEPTH ? FLAT_MAXDEPTH : (RowIndex)(reserveRows + 1024 / columnCapacity);
 		}
 
 		cacheRows.clear();
@@ -280,7 +285,7 @@ public:
 		FLAT_ASSERT(parent <= child || (child - parent) == row(parentDepth).column(child));
 		return (child - parent) == row(parentDepth).column(child);
 	}
-	inline RowIndex getParentIndex(RowIndex parentDepth, ColumnIndex child) const
+	inline ColumnIndex getParentIndex(RowIndex parentDepth, ColumnIndex child) const
 	{
 		FLAT_ASSERT(cacheIsValid);
 		return row(parentDepth).column(child);
@@ -676,7 +681,7 @@ FlatHierarchyBase::HierarchyIndex createNodeAsChildOf(FlatHierarchy<ValueType, S
 
 	FLAT_ASSERT(newIndex > parentIndex);
 
-	SizeType newParentCount = h.depths[parentIndex] + 1;
+	FLAT_DEPTHTYPE newParentCount = h.depths[parentIndex] + 1;
 	FLAT_ASSERT(newParentCount < FLAT_MAXDEPTH); // Over flow protection
 
 	h.values.insert(newIndex, value);

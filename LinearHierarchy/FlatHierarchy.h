@@ -1,44 +1,317 @@
 #ifndef FLAT_FLATHIERARCHY_H
 #define FLAT_FLATHIERARCHY_H
 
-#include "FlatAssert.h"
+//------------------------------------------------------------------
+// FlatHierarchy.h
+//
+// August 2016, Riku Rajaniemi
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use,
+// copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+//------------------------------------------------------------------
 
-#include <inttypes.h>
-#define FLAT_SIZETYPE uint32_t
-#define FLAT_DEPTHTYPE uint16_t
+
+
+#if FLAT_ASSERTS_ENABLED == true
+	
+	#ifdef _WIN32
+		#if defined(FLAT_ALLOW_INCLUDES)
+			#include <stdio.h>    // printf
+			#include <windows.h>  // system
+			#define FLAT_ASSERT_IMPL(expr, fmt, ...) \
+				do{ if(!(expr)) { \
+					printf("\nAssertion failed.\nExpr: \"%s\"\nin %s() at %s:%u\n", #expr, __FUNCTION__, __FILE__, __LINE__); \
+					printf(fmt, ##__VA_ARGS__); \
+					system("pause"); \
+					__debugbreak(); \
+				} }while(false)
+		#else
+			#define FLAT_ASSERT_IMPL(expr, fmt, ...) \
+				do{ if(!(expr)) { \
+					__debugbreak(); \
+				} }while(false)		
+		#endif
+		#define FLAT_ASSERT(expr) FLAT_ASSERT_IMPL(expr, "%s", "")
+		#define FLAT_ASSERTF(expr, fmt, ...) FLAT_ASSERT_IMPL(expr, "Message: " fmt "\n", __VA_ARGS__)
+
+	#else // _WIN32
+
+		#include <assert.h>
+		
+		#define FLAT_ASSERT_IMPL(expr, fmt, ...) \
+			do{ if(!(expr)) { \
+				printf("\nAssertion failed.\nExpr: \"%s\"\nin %s() at %s:%u\n", #expr, __FUNCTION__, __FILE__, __LINE__); \
+				printf(fmt, ##__VA_ARGS__); \
+				assert(false); \
+			} }while (false)
+
+		#define FLAT_ASSERT(expr) FLAT_ASSERT_IMPL(expr, "%s", "")
+		#define FLAT_ASSERTF(expr, fmt, ...) FLAT_ASSERT_IMPL(expr, "Message: " fmt "\n", __VA_ARGS__)
+
+	#endif // _WIN32
+
+#else
+
+	#define FLAT_ASSERT(expr) do{}while(false)
+	#define FLAT_ASSERTF(expr, fmt, ...) do{}while(false)
+
+#endif
+
+#ifndef FLAT_ERROR
+	#define FLAT_ERROR(p) FLAT_ASSERT(0 && (p))
+#endif
+
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned long int uint32_t;
+typedef unsigned long long int uint64_t;
+typedef unsigned long long int uintptr_t;
+
+static_assert(sizeof(uint8_t) == 1, "uint8_t isn't actually 1 byte long");
+static_assert(sizeof(uint16_t) == 2, "uint16_t isn't actually 2 bytes long");
+static_assert(sizeof(uint32_t) == 4, "uint32_t isn't actually 4 bytes long");
+static_assert(sizeof(uint64_t) == 8, "uint64_t isn't actually 8 bytes long");
+static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t isn't actually pointer lenght");
+
 
 // Exclude most significant bit to catch roll over errors
 #define FLAT_MAXDEPTH ((FLAT_DEPTHTYPE)(~0) >> 1)
 
-#define FLAT_ERROR(string) FLAT_ASSERT(!(string))
 
-#include <string.h> /* memset, memcpy, memmoce*/
-#define FLAT_MEMSET memset
-#define FLAT_MEMCPY memcpy
-#define FLAT_MEMMOVE memmove
+#if FLAT_ALLOW_INCLUDES == true
+	#ifndef FLAT_MEMCPY
+		#include <string.h> /* memcpy, memmove*/
+		#define FLAT_MEMCPY(dst, src, length) memcpy(dst, src, length)
+	#endif
+	#ifndef FLAT_MEMMOVE
+		#include <string.h> /* memcpy, memmove*/
+		#define FLAT_MEMMOVE(dst, src, length) memmove(dst, src, length)
+	#endif
+#else
+	#ifndef FLAT_MEMCPY
+		inline void flat_memcpy_impl(char* dst, const char* src, uint32_t length)
+		{
+			FLAT_ASSERT(dst != 0);
+			FLAT_ASSERT(src != 0);
+			FLAT_ASSERT(src != dst);
+			FLAT_ASSERT(dst + length <= src || src + length <= dst);
 
-#include <emmintrin.h>
-#define FLAT_USE_SIMD true
+			for (uint32_t i = 0; i < length; i++)
+			{
+				dst[i] = src[i];
+			}
+		}
+		#define FLAT_MEMCPY(dst, src, length) flat_memcpy_impl((char*)(dst), (const char*)(src), length)
+	#endif
+
+	#ifndef FLAT_MEMMOVE
+		inline void flat_memmove_impl(char* dst, const char* src, uint32_t length)
+		{
+			FLAT_ASSERT(dst != 0);
+			FLAT_ASSERT(src != 0);
+			FLAT_ASSERT(src != dst);
+
+			if (dst + length <= src || src + length <= dst)
+			{
+				// No overlap
+				FLAT_MEMCPY(dst, src, length);
+			}
+			else if(dst < src)
+			{
+				for (uint32_t i = 0; i < length; i++)
+				{
+					dst[i] = src[i];
+				}
+			}
+			else
+			{
+				for (uint32_t i = length; i-- > 0;)
+				{
+					dst[i] = src[i];
+				}
+			}
+		}
+		#define FLAT_MEMMOVE(dst, src, length) flat_memmove_impl((char*)(dst), (const char*)(src), length)
+	#endif
+#endif
+
+#ifndef FLAT_USE_SIMD
+#if FLAT_ALLOW_INCLUDES == true
+	#define FLAT_USE_SIMD true
+#else
+	#define FLAT_USE_SIMD false
+#endif
+#endif
+
+#if FLAT_USE_SIMD == true
+	#if FLAT_ALLOW_INCLUDES == true
+		#include <immintrin.h>
+	#else
+		#error "Cannot use SIMD without includes. Define FLAT_ALLOW_INCLUDES as true or do NOT define FLAT_USE_SIMD as true"
+	#endif
+#endif
+
+#define FLAT_SIZETYPE uint32_t
+#define FLAT_DEPTHTYPE uint16_t
+
+#ifndef FLAT_ALLOC
+#ifdef _WIN32
+	#define FLAT_ALLOC(size) _aligned_malloc(size, 4)
+	#define FLAT_FREE(ptr) _aligned_free(ptr)
+#else
+	#define FLAT_ALLOC(size) malloc(size);
+	#define FLAT_FREE(ptr) free(ptr)
+#endif
+#endif
+
+#ifndef FLAT_FREE
+	#error "FLAT_ALLOC was defined but FLAT_FREE was not"
+#endif
 
 #ifndef FLAT_VECTOR
-	#include <vector>
 	template<typename ValueType>
-	class FLAT_Vector_Type : public std::vector<ValueType alignas(16)>
+	class flat_vector_impl
 	{
+		flat_vector_impl(const flat_vector_impl&) { } // private move constructor to avoid mistakes
+		void operator=(const flat_vector_impl&) { }   // private move assignment to avoid mistakes
 	public:
-		void pushBack(const ValueType& v) { push_back(v); }
-		SizeType getSize() const { return (SizeType)size(); }
-		void insert(SizeType index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
-		const ValueType& getBack() const { return back(); }
-		ValueType& getBack() { return back(); }
-		SizeType getCapacity() const { return capacity(); }
-		void zero(SizeType start, SizeType end) { return std::fill(begin() + start, begin() + end, 0); }
-		ValueType* getPointer() { return &*begin(); }
-		const ValueType* getPointer() const { return &*begin(); }
-		void erase(SizeType index) { std::vector<ValueType>::erase(begin() + index); }
+		typedef uint32_t SizeType;
+
+		flat_vector_impl()
+			: buffer(nullptr)
+			, size(0)
+			, capacity(0)
+		{
+		}
+		~flat_vector_impl()
+		{
+			if (buffer != nullptr)
+			{
+#ifdef _WIN32
+				_aligned_free(buffer);
+#else
+				free(buffer);
+#endif
+			}
+
+		}
+
+		SizeType size;
+		SizeType capacity;
+		ValueType* buffer;
+
+		SizeType getSize() const { return size; }
+		SizeType getCapacity() const { return capacity; }
+
+		ValueType* getPointer() { return buffer; }
+		const ValueType* getPointer() const { return buffer; }
+
+		ValueType& getBack() { FLAT_ASSERT(size > 0); return buffer[size - 1]; }
+		const ValueType& getBack() const { FLAT_ASSERT(size > 0); return buffer[size - 1]; }
+
+		void clear() { size = 0; }
+		void resize(SizeType newSize) { FLAT_ASSERT(newSize < ((SizeType)(~0) >> 1)); reserve(newSize); size = newSize; }
+		ValueType operator[] (SizeType index) const { FLAT_ASSERT(index < size); return buffer[index]; }
+		ValueType& operator[] (SizeType index) { FLAT_ASSERT(index < size); return buffer[index]; }
+
+		void reserve(SizeType capacity)
+		{
+			if (capacity > this->capacity)
+			{
+				ValueType* temp = (ValueType*)FLAT_ALLOC( capacity * sizeof(ValueType) );
+				if (buffer != nullptr)
+				{
+					FLAT_MEMCPY((char*)temp, (char*)buffer, size * sizeof(ValueType));
+					FLAT_FREE(buffer);
+				}
+
+				buffer = temp;
+				this->capacity = capacity;
+			}
+		}
+
+		void pushBack(const ValueType& v)
+		{
+			if (size < capacity)
+			{
+				buffer[size++] = v;
+			}
+			else
+			{
+				reserve((1 + size) * 2);
+				buffer[size++] = v;
+			}
+		}
+		void insert(SizeType index, const ValueType& v)
+		{
+			FLAT_ASSERT(index <= size);
+
+			if (size < capacity)
+			{
+				FLAT_MEMMOVE(buffer + index + 1, buffer + index, (size - index) * sizeof(ValueType));
+			}
+			else if (buffer != nullptr)
+			{
+				FLAT_ASSERT(capacity == size);
+				FLAT_ASSERT(capacity > 0);
+
+				capacity = capacity * 2;
+
+				ValueType* temp = (ValueType*)FLAT_ALLOC(capacity * sizeof(ValueType));
+				FLAT_MEMCPY(temp,             buffer,          index         * sizeof(ValueType));
+				FLAT_MEMCPY(temp + index + 1, buffer + index, (size - index) * sizeof(ValueType));
+				FLAT_FREE(buffer);
+				buffer = temp;
+			}
+			else
+			{
+				FLAT_ASSERT(size == 0);
+				FLAT_ASSERT(capacity == 0);
+
+				capacity = 16;
+				buffer = (ValueType*)FLAT_ALLOC(capacity * sizeof(ValueType));
+			}
+
+			buffer[index] = v;
+			++size;
+		}
+
+		void zero(SizeType start, SizeType end)
+		{
+			FLAT_ASSERT(end <= size);
+			for (SizeType i = start; i < end; i++)
+			{
+				buffer[i] = 0;
+			}
+		}
+		void erase(SizeType index)
+		{
+			FLAT_ASSERT(index < size);
+			
+			FLAT_MEMMOVE(buffer + index, buffer + index + 1, (size - index - 1) *  sizeof(ValueType));
+			--size;
+		}
 	};
 	
-	#define FLAT_VECTOR FLAT_Vector_Type
+	#define FLAT_VECTOR flat_vector_impl
 #endif
 
 /////////////////////////////////////////////////////////////////
@@ -222,16 +495,16 @@ public:
 					result = depths[i];
 			}
 		}
-#ifdef MAX_PERF
-		//{ // Correctness check
-		//	SizeType check = 0;
-		//	for (HierarchyIndex i = 0; i < getCount(); i++)
-		//	{
-		//		if (check < depths[i])
-		//			check = depths[i];
-		//	}
-		//	FLAT_ASSERT(check == result);
-		//}
+#ifdef _DEBUG
+		{ // Correctness check
+			SizeType check = 0;
+			for (HierarchyIndex i = 0; i < getCount(); i++)
+			{
+				if (check < depths[i])
+					check = depths[i];
+			}
+			FLAT_ASSERT(check == result);
+		}
 #endif
 		return result;
 #endif
@@ -397,16 +670,16 @@ public:
 			}
 			return result;
 		}
-#ifdef MAX_PERF
-		//{ // Correctness check
-		//	SizeType check = 0;
-		//	for (HierarchyIndex i = first; i <= last; i++)
-		//	{
-		//		if (check > depths[i])
-		//			check = depths[i];
-		//	}
-		//	FLAT_ASSERT(check == result);
-		//}
+#ifdef _DEBUG
+		{ // Correctness check
+			SizeType check = 0;
+			for (HierarchyIndex i = first; i <= last; i++)
+			{
+				if (check > depths[i])
+					check = depths[i];
+			}
+			FLAT_ASSERT(check == result);
+		}
 #endif
 		return result;
 #endif
@@ -495,7 +768,7 @@ public:
 
 		FLAT_ASSERT(newIndex > parentIndex);
 
-		SizeType newParentCount = depths[parentIndex] + 1;
+		FLAT_DEPTHTYPE newParentCount = depths[parentIndex] + 1;
 		FLAT_ASSERT(newParentCount < FLAT_MAXDEPTH); // Over flow protection
 
 		values.insert(newIndex, value);

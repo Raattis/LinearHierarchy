@@ -3,7 +3,6 @@
 
 #include "FlatAssert.h"
 
-#include <inttypes.h>
 typedef uint32_t SizeType;
 
 #ifndef FLAT_VECTOR
@@ -321,11 +320,17 @@ struct RivalTree
 			treeNodeBuffers.pushBack(new FLAT_VECTOR<Node>());
 
 			treeNodeBuffers.getBack()->resize(BufferSize);
+
 			for (SizeType i = treeNodeBuffers.getBack()->getSize(); i-- > 0; )
 			{
 				Node& nnn = treeNodeBuffers.getBack()->operator[](i);
 				nnn.nextUnusedNode = firstUnusedNode;
 				firstUnusedNode = &nnn;
+
+				// Constructor for child vector doesn't get called automatically, so set its valus to 0
+				nnn.children.size = 0;
+				nnn.children.capacity = 0;
+				nnn.children.buffer = 0;
 			}
 		}
 
@@ -347,10 +352,11 @@ struct RivalTree
 
 		FLAT_ASSERT(node != root);
 		FLAT_ASSERT(node->parent == NULL || !isChildOf(node->parent, node));
-#ifndef MAX_PERF
-		recursionCounter = 0;
-#endif
+
+		FLAT_ASSERT(recursionCounter == 0);
+
 		firstUnusedNode = node->clear(firstUnusedNode);
+
 		FLAT_ASSERT(recursionCounter == 0);
 	}
 

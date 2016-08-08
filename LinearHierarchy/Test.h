@@ -2,19 +2,21 @@
 
 #ifdef MAX_PERF
 #define FLAT_ASSERTS_ENABLED false
+#define FLAT_ALLOW_INCLUDES true
 #else
 #define FLAT_ASSERTS_ENABLED true
+#define FLAT_ALLOW_INCLUDES true
 #endif
 
+
+#include "FastHash.h"
 #include "FlatHierarchy.h"
 #include "HierarchyCache.h"
 #include "RivalTree.h"
 
 #include <stdio.h>      /* printf, fgets */
-#include <inttypes.h>
 #include <time.h>
 #include <windows.h>
-#include "FastHash.h"
 
 typedef uint32_t SizeType;
 
@@ -36,7 +38,7 @@ const SizeType ArrTransformTestSizesCount = 12;
 const SizeType ArrBaseTestSizes[] =        { 10,     50,    100,   200,   500,  1000, 2000, 5000, 10000, 20000 };
 //const SizeType ArrBaseTestRoundNumbers[] = { 50000,  20000, 5000,  2000,  1000, 500,  100,  10,   3,     3 };
 const SizeType ArrBaseTestRoundNumbers[] = { 1000,  500, 500,  500,  100, 100,  30,  10,  5,     3 };
-//const SizeType ArrBaseTestRoundNumbers[] = { 200,  50, 20,  10,  10, 10,  10,  5,   3,     3 };
+//const SizeType ArrBaseTestRoundNumbers[] = { 100,  50, 20,  10,  10, 10,  10,  5,   3,     3 };
 
 const SizeType ArrTransformTestSizes[]    = { 10,     20,   50,    100,   200,  500,   1000, 1500, 2000, 2500, 3000, 3500 };
 //const SizeType ArrTransformRoundNumbers[] = { 10000,  5000, 2000,  1000,  1000, 1000,  500,  300,  100,  50,   50,   50 };
@@ -74,12 +76,12 @@ const uint32_t TestMask
 	//Flat1 |
 	//Flat2 |
 	//Flat3 |
-	//Rival |
-	Naive |
+	Rival |
+	//Naive |
 	//Flat1Transform |
 	//RivalTransform |
 	//NaiveTransform |
-	//Every |
+	Every |
 #ifdef MAX_PERF
 	Every |
 #endif
@@ -456,7 +458,7 @@ public:
 	if (DoCacheFlushing)
 	{
 		//ScopedProfiler sdf(0, true);
-		pingMemory();
+		flushCache();
 		//printf("%.0lf\n", sdf.stop());
 	}
 
@@ -507,7 +509,7 @@ struct Random
 	static void init(uint32_t seed = InitSeed)
 	{
 		random = seed;
-		randomState[0] = uint64_t((1181783497276652981U / 3U + 1181783497276652981U / 13U) * 71551U);
+		randomState[0] = uint64_t((1181783497276652981U / 3U + 1181783497276652981U / 13U) * 37U);
 		randomState[1] = uint64_t(1181783497276652981U);
 		counter = 0;
 	}
@@ -965,7 +967,7 @@ void Other_Tree_Test_Impl()
 #ifdef MAX_PERF
 	const bool enableSanityChecks = false;
 #else
-	const bool enableSanityChecks = false;
+	const bool enableSanityChecks = true;
 #endif
 
 	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrBaseTestSizesCount; fullRoundNumber++)
@@ -1016,6 +1018,15 @@ void Other_Tree_Test_Impl()
 					char buffer[5]; buffer[4] = '\0';
 					char buffer2[5]; buffer2[4] = '\0';
 					printf("Add %s to #%d \"%s\"\n", getName(handle, buffer), parent, getName(parentNode->value, buffer2));
+				}
+
+				if (enableSanityChecks)
+				{
+					if (VerbosePrinting)
+					{
+						PRINT::print(tree);
+					}
+					tree.root->sanityCheck();
 				}
 
 				Node* node = NULL;
