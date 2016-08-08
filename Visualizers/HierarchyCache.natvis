@@ -14,4 +14,14 @@
 			</IndexListItems>
 		</Expand>
 	</Type>
+	
+	<Type Name="flat_vector_impl&lt;*&gt;">
+		<DisplayString>test {{size = {size}, cap = {capacity}}}</DisplayString>
+		<Expand>
+			<IndexListItems>
+				<Size>size</Size>
+				<ValueNode>*($T1*)(buffer + $i)</ValueNode>
+			</IndexListItems>
+		</Expand>
+	</Type>
 </AutoVisualizer>
