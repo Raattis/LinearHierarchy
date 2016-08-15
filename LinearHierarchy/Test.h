@@ -27,23 +27,24 @@ const SizeType ArrTransformTestSizesCount = 6;
 const SizeType DebugBaseTestRoundNumber = 10;
 
 #elif defined(MAX_PERF)
-const SizeType ArrBaseTestSizesCount = 10;
-const SizeType ArrTransformTestSizesCount = 12;
+const SizeType ArrBaseTestSizesCount = 11;
+const SizeType ArrTransformTestSizesCount = 11;
 
 #else
-const SizeType ArrBaseTestSizesCount = 10;
-const SizeType ArrTransformTestSizesCount = 12;
+const SizeType ArrBaseTestSizesCount = 11;
+const SizeType ArrTransformTestSizesCount = 11;
 #endif
 
-const SizeType ArrBaseTestSizes[] =        { 10,     50,    100,   200,   500,  1000, 2000, 5000, 10000, 20000 };
-//const SizeType ArrBaseTestRoundNumbers[] = { 50000,  20000, 5000,  2000,  1000, 500,  100,  10,   3,     3 };
-const SizeType ArrBaseTestRoundNumbers[] = { 1000,  500, 500,  500,  100, 100,  30,  10,  5,     3 };
-//const SizeType ArrBaseTestRoundNumbers[] = { 100,  50, 20,  10,  10, 10,  10,  5,   3,     3 };
+const SizeType ArrBaseTestSizes[]          = { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
+const SizeType ArrBaseTestRoundNumbers[]   = { 1000,  500,  500,    500,   100,  100,     30,   10,    5,     3,     3 };
+//const SizeType ArrBaseTestRoundNumbers[] = { 100,    50,   20,     10,    10,   10,     10,    5,    3,     3,     2 };
 
-const SizeType ArrTransformTestSizes[]    = { 10,     20,   50,    100,   200,  500,   1000, 1500, 2000, 2500, 3000, 3500 };
-//const SizeType ArrTransformRoundNumbers[] = { 10000,  5000, 2000,  1000,  1000, 1000,  500,  300,  100,  50,   50,   50 };
-const SizeType ArrTransformRoundNumbers[] = { 1000,  1000, 500,  200,  200, 100,  100,  100,  50,  50,   50,   50 };
-//const SizeType ArrTransformRoundNumbers[] = { 100,  50, 20,  10,  10, 10,  5,  5,  5,  5,   5,   5 };
+const SizeType ArrTransformTestSizes[]    =  { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
+const SizeType ArrTransformRoundNumbers[] =  { 1000,  1000, 500,  200,  200, 100,  100,  100,  50,  50,   50,   50 };
+//const SizeType ArrTransformRoundNumbers[]= {  100,    50,  20,   10,   10,  10,    5,    5,   5,   5,    5,   5 };
+
+const SizeType ArrRandomSeedsCount = 10000;
+SizeType ArrRandomSeeds[ArrRandomSeedsCount] = {};
 
 #ifdef MAX_PERF
 const bool DoCacheFlushing = true;
@@ -88,9 +89,9 @@ const uint32_t TestMask
 	0;
 
 #if false
-#define FLAT_NO_CACHE_CONDITION     (Random::random % 8 <= 3)
-#define FLAT_CACHE_CONDITION        (Random::random % 8 > 3 && Random::random % 8 <= 6)
-#define FLAT_CACHE_UNPREP_CONDITION (Random::random % 8 == 7)
+#define FLAT_NO_CACHE_CONDITION     (Random::random % 15 < 5)
+#define FLAT_CACHE_CONDITION        (Random::random % 15 >= 5 && Random::random % 15 < 10)
+#define FLAT_CACHE_UNPREP_CONDITION (Random::random % 15 >= 10)
 #elif false
 #define FLAT_NO_CACHE_CONDITION     (true)
 #define FLAT_CACHE_CONDITION        (false)
@@ -499,45 +500,70 @@ public:
 
 struct Random
 {
-	static const uint32_t InitSeed = 1771551;
+	// Mersenne twister
+	// from https://en.wikipedia.org/wiki/Mersenne_twister#Python_implementation
+
+	static uint32_t mt[624];
+	static uint32_t index;
 	static uint32_t random;
 	static uint32_t counter;
-	uint64_t x; // The state must be seeded with a nonzero value.
 
-	static uint64_t randomState[2];
-
-	static void init(uint32_t seed = InitSeed)
+	static void init(uint32_t seed)
 	{
-		random = seed;
-		randomState[0] = uint64_t((1181783497276652981U / 3U + 1181783497276652981U / 13U) * 37U);
-		randomState[1] = uint64_t(1181783497276652981U);
-		counter = 0;
+		index = 624;
+		mt[0] = seed;
+		for (uint32_t i = 1; i < 624; ++i)
+		{
+			mt[i] = 1812433253 * (mt[i - 1] ^ (mt[i - 1] >> 30)) + i;
+		}
 	}
 
-	static uint64_t xorshift128plus() {
-		uint64_t x = randomState[0];
-		uint64_t const y = randomState[1];
-		randomState[0] = y;
-		x ^= x << 23; // a
-		randomState[1] = x ^ y ^ (x >> 17) ^ (y >> 26); // b, c
-		return randomState[1] + y;
+	static uint32_t Extract()
+	{
+		if (index >= 624)
+		{
+			// Twist
+			for (uint32_t i = 0; i < 624; ++i)
+			{
+				uint32_t y = ((mt[i] & 0x80000000) + (mt[(i + 1) % 624] & 0x7fffffff));
+				mt[i] = (mt[(i + 397) % 624] ^ y) >> 1;
+
+				if ((y % 2) != 0)
+					mt[i] = mt[i] ^ 0x9908B0DF;
+			}
+			index = 0;
+		}
+
+		// Extract
+		{
+			uint32_t y = mt[index];
+
+			y = y ^ (y >> 11);
+			y = y ^ ((y << 7) & 2636928640);
+			y = y ^ ((y << 15) & 4022730752);
+			y = y ^ (y >> 18);
+
+			++index;
+			return y;
+		}
 	}
 
-	static uint32_t get(SizeType min, SizeType max)
+	static uint32_t get(uint32_t min, uint32_t max)
 	{
-		random = (uint32_t)xorshift128plus();
+		random = Extract();
 		uint32_t result = max <= min ? max : min + random % (max - min);
 		++counter;
 		//if (VerbosePrinting)
 		//{
-		//	printf("RandomRange. Counter: %u, Value: %u, Min: %u, Max: %u\n", counter, result, min, max);
+		//	printf("RandomRange. Counter: %u, Value: %u, Min: %u, Max: %u, Raw: %u\n", counter, result, min, max, random);
 		//}
 		return result;
 	}
 };
+uint32_t Random::mt[624] = {};
+uint32_t Random::index = 0;
 uint32_t Random::random = 0;
 uint32_t Random::counter = 0;
-uint64_t Random::randomState[2] = {};
 
 
 
@@ -646,6 +672,8 @@ void FLAT_Test()
 
 	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrBaseTestSizesCount; fullRoundNumber++)
 	{
+		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
+
 		CurrentTreeSize = fullRoundNumber;
 
 		SizeType COUNT = 0;
@@ -972,6 +1000,8 @@ void Other_Tree_Test_Impl()
 
 	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrBaseTestSizesCount; fullRoundNumber++)
 	{
+		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
+
 		CurrentTreeSize = fullRoundNumber;
 
 		SizeType COUNT = 0;
@@ -1269,6 +1299,8 @@ void FLAT_TransformTest()
 
 	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount; fullRoundNumber++)
 	{
+		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
+
 		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber];
 		const SizeType TransformIterations = 10;
 
@@ -1421,6 +1453,7 @@ void Other_Tree_TransformTest_Impl()
 
 	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount; fullRoundNumber++)
 	{
+		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
 
 		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber];
 		const SizeType TransformIterations = 10;
@@ -1588,30 +1621,18 @@ void test()
 {
 	ScopedProfiler wholeTestProfiler;
 
-#ifdef MAX_PERF
-	// Get the CPU going
 	{
-		printf("Revving CPU up!\nWR");
-		uint32_t counter = ((uint32_t)(~0)) >> 6;
-		uint64_t& asdf = *(uint64_t*)malloc(sizeof(long));
-		asdf += 1181783497276652981 / 19;
-
-		while (--counter)
+		printf("Making random seeds...\n");
+		
+		Random::init(1771551);
+		for (SizeType i = 0; i < ArrRandomSeedsCount; i++)
 		{
-			Random::init((uint32_t)asdf);
-			asdf *= Random::get(0, (SizeType)asdf) + 1181783497276652981 / 13;
-			if ((counter & (1024 * 1024 * 8 - 1)) == 0)
-				printf("O");
+			ArrRandomSeeds[i] = Random::Extract();
 		}
-		printf("M!\n\n");
-
+		printf("Done!\n");
 	}
-#endif
 
 	memset(LogBuffer, ' ', sizeof(LogBuffer));
-
-	uint32_t seed = 1771551 * (SizeType)time(NULL);
-	seed = 1771551;
 
 	try
 	{
@@ -1622,7 +1643,7 @@ void test()
 			CurrentTreeType = 0;
 
 			printf("\nFlat Tree\n");
-			Random::init(seed);
+
 			FLAT_Test();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1635,7 +1656,6 @@ void test()
 			Rundi = 1;
 			CurrentTreeType = 1;
 
-			Random::init(seed);
 			FLAT_Test();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1649,7 +1669,7 @@ void test()
 			CurrentTreeType = 2;
 
 			printf("\nFlat Tree With Cold Cache\n");
-			Random::init(seed);
+
 			FLAT_Test();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1662,7 +1682,7 @@ void test()
 			CurrentTreeType = 3;
 
 			printf("\nNaive Tree\n");
-			Random::init(seed);
+
 			NAIVE_Test();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1675,7 +1695,7 @@ void test()
 			CurrentTreeType = 4;
 
 			printf("\nBuffered Tree\n");
-			Random::init(seed);
+
 			RIVAL_Test();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1700,7 +1720,7 @@ void test()
 
 			CurrentTreeType = 0;
 			Rundi = 0;
-			Random::init(seed);
+
 			FLAT_TransformTest();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1716,7 +1736,6 @@ void test()
 			Rundi = 0;
 			CurrentTreeType = 1;
 
-			Random::init(seed);
 			RIVAL_TransformTest();
 			CheckingHashes = true;
 			CurrentHash = 0;
@@ -1731,7 +1750,6 @@ void test()
 			Rundi = 0;
 			CurrentTreeType = 2;
 
-			Random::init(seed);
 			NAIVE_TransformTest();
 			CheckingHashes = true;
 			CurrentHash = 0;

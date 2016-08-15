@@ -174,7 +174,7 @@ static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t isn't actually poin
 
 #ifndef FLAT_ALLOC
 #ifdef _WIN32
-	#define FLAT_ALLOC(size) _aligned_malloc(size, 4)
+	#define FLAT_ALLOC(size) _aligned_malloc(size, 16)
 	#define FLAT_FREE(ptr) _aligned_free(ptr)
 #else
 	#define FLAT_ALLOC(size) malloc(size);
@@ -205,11 +205,7 @@ static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t isn't actually poin
 		{
 			if (buffer != nullptr)
 			{
-#ifdef _WIN32
-				_aligned_free(buffer);
-#else
-				free(buffer);
-#endif
+				FLAT_FREE(buffer);
 			}
 
 		}

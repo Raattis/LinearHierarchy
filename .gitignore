@@ -423,3 +423,5 @@ LinearHierarchy/output.csv
 *.tlog
 PerfomanceTest/LinearHierarchy.iobj
 *.ipdb
+*.png
+charts/output.csv
