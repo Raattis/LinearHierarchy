@@ -36,8 +36,8 @@ const SizeType ArrTransformTestSizesCount = 11;
 #endif
 
 const SizeType ArrBaseTestSizes[]          = { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
-const SizeType ArrBaseTestRoundNumbers[]   = { 1000,  500,  500,    500,   100,  100,     30,   10,    5,     3,     3 };
-//const SizeType ArrBaseTestRoundNumbers[] = { 100,    50,   20,     10,    10,   10,     10,    5,    3,     3,     2 };
+//const SizeType ArrBaseTestRoundNumbers[]   = { 1000,  500,  500,    500,   100,  100,     30,   10,    5,     3,     3 };
+const SizeType ArrBaseTestRoundNumbers[] = { 100,    50,   20,     10,    10,   10,     10,    5,    3,     3,     2 };
 
 const SizeType ArrTransformTestSizes[]    =  { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
 const SizeType ArrTransformRoundNumbers[] =  { 1000,  1000, 500,  200,  200, 100,  100,  100,  50,  50,   50,   50 };
@@ -77,14 +77,14 @@ const uint32_t TestMask
 	//Flat1 |
 	//Flat2 |
 	//Flat3 |
-	Rival |
-	//Naive |
+	//Rival |
+	Naive |
 	//Flat1Transform |
 	//RivalTransform |
 	//NaiveTransform |
-	Every |
+	//Every |
 #ifdef MAX_PERF
-	Every |
+	//Every |
 #endif
 	0;
 
@@ -459,7 +459,7 @@ public:
 	if (DoCacheFlushing)
 	{
 		//ScopedProfiler sdf(0, true);
-		flushCache();
+		shuffleMemory();
 		//printf("%.0lf\n", sdf.stop());
 	}
 
@@ -470,7 +470,7 @@ public:
 		: cumulator(cumulator)
 	{
 		if(DoCacheFlushing && !dontFlush)
-			flushCache();
+			shuffleMemory();
 
 		QueryPerformanceCounter(&start);
 	}
@@ -600,6 +600,17 @@ void FLAT_Test()
 {
 	typedef FlatHierarchy<Handle, HandleSorter> HierarchyType;
 
+	struct FLUSHER
+	{
+		static void flush(HierarchyType& t)
+		{
+			flushCache(t.depths.buffer);
+			flushCache(t.values.buffer);
+			flushCache(&t);
+		}
+	};
+	#define FLUSH_CACHE FLUSHER::flush(l);
+
 	struct PRINT
 	{
 		static void print(const HierarchyType& l)
@@ -723,6 +734,7 @@ void FLAT_Test()
 					if (FLAT_CACHE_CONDITION)
 						descendantCache.makeCacheValid(l);
 
+					FLUSH_CACHE
 					ScopedProfiler p(getStat(StatAdd));
 					if (FLAT_NO_CACHE_CONDITION)
 						l.createNodeAsChildOf(parent, handle);
@@ -765,6 +777,7 @@ void FLAT_Test()
 					if (FLAT_CACHE_CONDITION)
 						descendantCache.makeCacheValid(l);
 
+					FLUSH_CACHE
 					ScopedProfiler p(getStat(StatMove));
 					if (FLAT_NO_CACHE_CONDITION)
 						l.makeChildOf(child, parent);
@@ -806,6 +819,7 @@ void FLAT_Test()
 				if (FLAT_CACHE_UNPREP_CONDITION)
 					siblingCache.cacheIsValid = false;
 
+				FLUSH_CACHE
 				ScopedProfiler prof(getStat(StatLeafTravel));
 
 				if (FLAT_NO_CACHE_CONDITION)
@@ -855,11 +869,13 @@ void FLAT_Test()
 				SizeType depth = 0;
 				SizeType count = 0;
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatCalcDepth));
 					depth = l.findMaxDepth();
 				}
 
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatCalcCount));
 					count = l.getCount();
 				}
@@ -888,6 +904,7 @@ void FLAT_Test()
 					if (FLAT_CACHE_CONDITION)
 						descendantCache.makeCacheValid(l);
 
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatErase));
 					if (FLAT_NO_CACHE_CONDITION)
 						l.erase(child);
@@ -946,6 +963,18 @@ template<typename Tree>
 void Other_Tree_Test_Impl()
 {
 	typedef Tree::Node Node;
+
+	struct FLUSHER
+	{
+		static void flush(Tree& t)
+		{
+			Node* n = t.root;
+			flushCache(n);
+			flushCache(&t);
+		}
+	};
+	#undef FLUSH_CACHE
+	#define FLUSH_CACHE FLUSHER::flush(tree);
 
 	struct PRINT
 	{
@@ -1037,6 +1066,7 @@ void Other_Tree_Test_Impl()
 				SizeType parent = Random::get(0, COUNT);
 				Node* parentNode = NULL;
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatNthNode));
 					bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parent);
 					FLAT_ASSERT(success);
@@ -1061,6 +1091,7 @@ void Other_Tree_Test_Impl()
 
 				Node* node = NULL;
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatAdd));
 					node = tree.createNode(handle, parentNode);
 				}
@@ -1099,11 +1130,13 @@ void Other_Tree_Test_Impl()
 					Node* node = NULL;
 					Node* parentNode = NULL;
 					{
+						FLUSH_CACHE
 						ScopedProfiler prof(getStat(StatNthNode));
 						bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
 						FLAT_ASSERT(success);
 					}
 					{
+						FLUSH_CACHE
 						ScopedProfiler prof(getStat(StatNthNode));
 						bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parent);
 						FLAT_ASSERT(success);
@@ -1130,6 +1163,7 @@ void Other_Tree_Test_Impl()
 
 					{
 						FLAT_ASSERT(node != tree.root);
+						FLUSH_CACHE
 						ScopedProfiler prof(getStat(StatMove));
 						tree.makeChildOf(node, parentNode);
 					}
@@ -1163,6 +1197,7 @@ void Other_Tree_Test_Impl()
 			{
 				// travel to leaf
 
+				FLUSH_CACHE
 				ScopedProfiler prof(getStat(StatLeafTravel));
 
 				Node* currentNode = tree.root;
@@ -1195,11 +1230,13 @@ void Other_Tree_Test_Impl()
 				SizeType depth = 0;
 				SizeType count = 0;
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatCalcDepth));
 					depth = findDepth(tree.root);
 				}
 
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatCalcCount));
 					count = findCount(tree.root);
 				}
@@ -1226,6 +1263,7 @@ void Other_Tree_Test_Impl()
 				Node* node = NULL;
 
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatNthNode));
 					bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
 					FLAT_ASSERT(success);
@@ -1236,6 +1274,7 @@ void Other_Tree_Test_Impl()
 				{
 					isChildOf(node, tree.root);
 
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatErase));
 					tree.eraseNode(node);
 				}
@@ -1294,6 +1333,20 @@ namespace
 
 void FLAT_TransformTest()
 {
+	typedef FlatHierarchy<Transform, TransformSorter> HierarchyType;
+
+	struct FLUSHER
+	{
+		static void flush(HierarchyType& t)
+		{
+			flushCache(t.depths.buffer);
+			flushCache(t.values.buffer);
+			flushCache(&t);
+		}
+	};
+	#undef FLUSH_CACHE
+	#define FLUSH_CACHE FLUSHER::flush(l);
+
 	FLAT_VECTOR<Transform> resultTransforms;
 	resultTransforms.reserve(ArrTransformTestSizes[ArrTransformTestSizesCount - 1]);
 
@@ -1320,7 +1373,6 @@ void FLAT_TransformTest()
 		{
 			const bool IsFirstRound = fullRoundNumber == 0 && rn == 0;
 
-			typedef FlatHierarchy<Transform, TransformSorter> HierarchyType;
 			HierarchyType l(TransformTestSize);
 			l.createRootNode(Transform(0, 0, 1, 1));
 
@@ -1331,6 +1383,7 @@ void FLAT_TransformTest()
 				Transform trns = getRandomTransform();
 
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatAdd));
 					l.createNodeAsChildOf(parent, trns);
 				}
@@ -1355,6 +1408,7 @@ void FLAT_TransformTest()
 
 					if (CheckHashes && iteration == 0 && IsFirstRound)
 					{
+						FLUSH_CACHE
 						ScopedProfiler prof(getStat(StatTransformIt1));
 
 						resultTransforms.pushBack(l.values[0]);
@@ -1382,7 +1436,11 @@ void FLAT_TransformTest()
 					{
 						// Only log first and last iterations
 
-						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10), iteration != 0);
+						if (iteration == 0)
+						{
+							FLUSH_CACHE
+						}
+						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
 
 						resultTransforms.pushBack(l.values[0]);
 						tempBuffer[0] = l.values[0];
@@ -1448,6 +1506,19 @@ void FLAT_TransformTest()
 template<typename Tree>
 void Other_Tree_TransformTest_Impl()
 {
+	struct FLUSHER
+	{
+		static void flush(Tree& t)
+		{
+			flushCache(t.root);
+			flushCache(&t);
+		}
+	};
+
+	#undef FLUSH_CACHE
+	#define FLUSH_CACHE FLUSHER::flush(tree);
+
+
 	FLAT_VECTOR<Transform> resultTransforms;
 	resultTransforms.reserve(ArrTransformTestSizes[ArrTransformTestSizesCount - 1]);
 
@@ -1532,6 +1603,7 @@ void Other_Tree_TransformTest_Impl()
 				}
 
 				{
+					FLUSH_CACHE
 					ScopedProfiler prof(getStat(StatAdd));
 					tree.createNode(trns, parent);
 				}
@@ -1552,6 +1624,7 @@ void Other_Tree_TransformTest_Impl()
 
 					if (CheckHashes && iteration == 0 && IsFirstRound)
 					{
+						FLUSH_CACHE
 						ScopedProfiler prof(getStat(StatTransformIt1));
 						Lolmbda::recurseChecked(tree.root, Transform(), resultTransforms);
 					}
@@ -1559,6 +1632,7 @@ void Other_Tree_TransformTest_Impl()
 					{
 						// Only log first and last iterations
 
+						FLUSH_CACHE
 						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10), iteration != 0);
 						Lolmbda::recurse(tree.root, Transform(), resultTransforms);
 					}

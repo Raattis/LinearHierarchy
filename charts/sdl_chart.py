@@ -152,11 +152,12 @@ def make_chart(surface, name, headers, series_names, series, maxValue):
 
     pygame.display.flip()
 
+    try:
+        image_counter += 1
+    except:
+        image_counter = 1
 
-    if not 'image_counter' in globals():
-        image_counter = 0
-    pygame.image.save(surface, "{0}_{1}.png".format(image_counter, name))
-    image_counter += 1
+    pygame.image.save(surface, "{2}_-_{0}_-_{1}.png".format(image_counter, name, name_prefix))
     
     #pause()
 
@@ -196,7 +197,7 @@ def remove(del_name, names, series):
     return result_series, result_names
 
 def main():
-    global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols
+    global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols, name_prefix
 
     resolution = (800,600)
     left_margin = 75
@@ -235,7 +236,17 @@ def main():
     symbols["Naive 10"] = legend_font.render("o", True, colors["Naive 10"])
 
     lines = None
-    with open("output.csv", 'r') as f:
+
+    input_file = None
+    import os
+    for file in os.listdir('.'):
+        if file.endswith('.csv'):
+            input_file = file
+            break
+
+    name_prefix = input_file[:-4]
+    
+    with open(input_file, 'r') as f:
         lines = f.readlines()
 
     table = []

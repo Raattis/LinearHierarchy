@@ -59,10 +59,10 @@ struct String
 #ifdef _WIN32
 __declspec(noinline)
 #endif
-void flushCache()
+void shuffleMemory()
 {
-
 	// Shuffle some memory around in unoptimizable order to cause the CPU cache to be flushed
+	//return;
 
 	SizeType memSize = 6 * 1024 * 1024; // 6M to flush most of the CPU cache
 	static SizeType* mem = NULL;
@@ -157,4 +157,45 @@ void flushCache()
 		mem[i + 30 * p] = mem[i + 25 * p];
 	}
 
+}
+
+
+#include "RivalTree.h"
+
+void flushCache(RivalTreeNodeBase* node)
+{
+	typedef FLAT_VECTOR<RivalTreeNodeBase*> NodeVector;
+	NodeVector nodes;
+	typedef FLAT_VECTOR<void*> ChildVectorVector;
+	ChildVectorVector cvv;
+
+	struct ASDF
+	{
+		static void gather(NodeVector& nodes, ChildVectorVector& cvv, RivalTreeNodeBase* node)
+		{
+			nodes.pushBack(node);
+			if (node->children.buffer != NULL)
+				cvv.pushBack(node->children.buffer);
+			for (SizeType i = 0; i < node->children.getSize(); ++i)
+			{
+				gather(nodes, cvv, node->children[i]);
+			}
+		}
+	};
+
+	ASDF::gather(nodes, cvv, node);
+
+	for (SizeType i = 0; i < nodes.getSize(); ++i)
+	{
+		_mm_clflush(nodes[i]);
+	}
+
+	for (SizeType i = 0; i < cvv.getSize(); ++i)
+	{
+		_mm_clflush(cvv[i]);
+	}
+}
+void flushCache(void* p)
+{
+	_mm_clflush(p);
 }
