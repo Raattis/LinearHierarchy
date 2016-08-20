@@ -14,8 +14,7 @@
 #include "HierarchyCache.h"
 #include "RivalTree.h"
 
-#include <stdio.h>      /* printf, fgets */
-#include <time.h>
+#include <stdio.h>      /* printf */
 #include <windows.h>
 
 typedef uint32_t SizeType;
@@ -512,7 +511,7 @@ void testTree()
 			test_createTree(t);
 			SizeType nodeCount = 1;
 
-			printf("\rProgress:\t%d / %d,\tcurrentHash: %x", repeatNumber + 1, TestRepeatCount, runningHash);
+			printf("\rCurrentHash: %08x, progress: %d / %d   ", runningHash, repeatNumber + 1, TestRepeatCount);
 
 			for (SizeType i = nodeCount; i < TestNodeCount; i++)
 			{
