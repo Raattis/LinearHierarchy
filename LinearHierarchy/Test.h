@@ -341,20 +341,6 @@ namespace
 	}
 }
 
-namespace
-{
-	const uint32_t TransformBufferSize = 1024 * 32;
-	Transform TransformBuffer[TransformBufferSize];
-	SizeType CurrentTransform = 0;
-	void setTransform(const Transform& t)
-	{
-		if (!CheckingHashes)
-			TransformBuffer[CurrentTransform++] = t;
-		else
-			FLAT_ASSERT(TransformBuffer[CurrentTransform++].equals(t));
-	}
-}
-
 
 class ScopedProfiler
 {
@@ -484,123 +470,20 @@ uint32_t Random::random = 0;
 uint32_t Random::counter = 0;
 uint32_t Random::defaultSeed = {};
 
-void test_print(const FlatHierarchy<Transform, TransformSorter>& tree)
-{
-#ifndef MAX_PERF
-	struct LOLMBDA
-	{
-		static const char* getName(Transform& t, char* buffer)
-		{
-			memcpy(buffer, t.name, 4);
-			return buffer;
-		}
-	};
-
-	printf("\n");
-	for (SizeType c = 0; c < tree.getCount(); c++)
-	{
-		char buffer[5];
-		buffer[4] = '\0';
-		printf("%s ", LOLMBDA::getName(tree.values[c], buffer));
-	}
-	printf("\n");
-	for (SizeType c = 0; c < tree.getCount(); c++)
-	{
-		if (tree.depths[c] < 10)
-			printf("  %u  ", tree.depths[c]);
-		else
-			printf("  %u ", tree.depths[c]);
-	}
-	printf("\n");
-	for (SizeType c = 0; c < tree.getCount() + 1; c++)
-	{
-		printf("-----");
-	}
-
-	printf("\n");
-	for (SizeType c = 0; c < tree.getCount(); c++)
-	{
-		if (c < 10)
-			printf("  %d  ", c);
-		else
-			printf("  %d ", c);
-	}
-
-	printf("\n");
 
 
-	char buffer[4096];
-	for (SizeType r = 0, end = tree.findMaxDepth() + 1; r < end; r++)
-	{
-		buffer[tree.getCount() * 5] = '\0';
 
-		// Iterate columns backwards to benefit from linear parent lookup
-		for (SizeType c = 0; c < tree.getCount(); ++c)
-		{
-			bool hasDirectChildren = false;
 
-			for (SizeType i = c + 1; i < tree.getCount(); i++)
-			{
-				if (tree.depths[i] > r + 1)
-					continue;
-				hasDirectChildren = tree.depths[i] == r + 1;
-				break;
-			}
 
-			if (tree.depths[c] == r)
-			{
-				LOLMBDA::getName(tree.values[c], buffer + c * 5);
-				*(buffer + c * 5 + 4) = ' ';
-			}
-			else if (tree.depths[c] == r + 1)
-				memcpy(buffer + c * 5, (hasDirectChildren ? "-v---" : "-v   "), 5);
-			else if (tree.depths[c] > r && hasDirectChildren)
-				memcpy(buffer + c * 5, "-----", 5);
-			else
-				memcpy(buffer + c * 5, "     ", 5);
-		}
-		printf("%s\n", buffer);
-	}
-	printf("\n");
-#endif
-}
-
-template<typename Tree>
-void test_print_impl(const Tree& tree)
-{
-#ifndef MAX_PERF
-	struct LOLMBDA
-	{
-		static void recurse(Tree::Node* n, FlatHierarchy<Transform, TransformSorter>& result, SizeType depth = 0)
-		{
-			result.values.pushBack(n->value);
-			result.depths.pushBack((FlatHierarchy<Transform, TransformSorter>::DepthValue) depth);
-
-			for (SizeType i = 0; i < n->children.getSize(); i++)
-			{
-				recurse((Tree::Node*)n->children[i], result, depth + 1);
-			}
-		}
-	};
-
-	if (tree.root == NULL)
-		return;
-
-	FlatHierarchy<Transform, TransformSorter> temp;
-	LOLMBDA::recurse(tree.root, temp);
-
-	test_print(temp);
-#endif
-}
-
-void test_print(NaiveTree<Transform, TransformSorter>& tree)
-{
-	test_print_impl(tree);
-}
-void test_print(RivalTree<Transform, TransformSorter>& tree)
-{
-	test_print_impl(tree);
-}
+///
+// 
+// 
+// 
+//  Test loop function
+// 
+// 
+// 
+///
 
 template<typename Tree>
 void testTree()
@@ -691,6 +574,7 @@ void testTree()
 				}
 			}
 
+			if(repeatNumber + 1 < TestRepeatCount) // Don't erase on last repeat so there is something to print
 			{
 				test_removeNode(t, nodeCount, 0);
 			}
@@ -725,6 +609,20 @@ void testTree()
 	CheckingHashes = true;
 }
 
+
+
+
+
+
+///
+// 
+// 
+// 
+//  Flat tree test functions
+// 
+// 
+// 
+///
 
 void test_createTree(FlatHierarchy<Transform, TransformSorter>& tree)
 {
@@ -922,10 +820,100 @@ void test_removeNode(FlatHierarchy<Transform, TransformSorter>& tree, SizeType& 
 }
 
 
+void test_print(const FlatHierarchy<Transform, TransformSorter>& tree)
+{
+#ifndef MAX_PERF
+	struct LOLMBDA
+	{
+		static const char* getName(Transform& t, char* buffer)
+		{
+			memcpy(buffer, t.name, 4);
+			return buffer;
+		}
+	};
+
+	printf("\n\n");
+	for (SizeType c = 0; c < tree.getCount(); c++)
+	{
+		char buffer[5];
+		buffer[4] = '\0';
+		printf("%s ", LOLMBDA::getName(tree.values[c], buffer));
+	}
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount(); c++)
+	{
+		if (tree.depths[c] < 10)
+			printf("  %u  ", tree.depths[c]);
+		else
+			printf("  %u ", tree.depths[c]);
+	}
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount() + 1; c++)
+	{
+		printf("-----");
+	}
+
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount(); c++)
+	{
+		if (c < 10)
+			printf("  %d  ", c);
+		else
+			printf("  %d ", c);
+	}
+
+	printf("\n");
+
+
+	char buffer[4096];
+	for (SizeType r = 0, end = tree.findMaxDepth() + 1; r < end; r++)
+	{
+		buffer[tree.getCount() * 5] = '\0';
+
+		// Iterate columns backwards to benefit from linear parent lookup
+		for (SizeType c = 0; c < tree.getCount(); ++c)
+		{
+			bool hasDirectChildren = false;
+
+			for (SizeType i = c + 1; i < tree.getCount(); i++)
+			{
+				if (tree.depths[i] > r + 1)
+					continue;
+				hasDirectChildren = tree.depths[i] == r + 1;
+				break;
+			}
+
+			if (tree.depths[c] == r)
+			{
+				LOLMBDA::getName(tree.values[c], buffer + c * 5);
+				*(buffer + c * 5 + 4) = ' ';
+			}
+			else if (tree.depths[c] == r + 1)
+				memcpy(buffer + c * 5, (hasDirectChildren ? "-v---" : "-v   "), 5);
+			else if (tree.depths[c] > r && hasDirectChildren)
+				memcpy(buffer + c * 5, "-----", 5);
+			else
+				memcpy(buffer + c * 5, "     ", 5);
+		}
+		printf("%s\n", buffer);
+	}
+	printf("\n");
+#endif
+}
 
 
 
 
+
+///
+// 
+// 
+// 
+//  Pointer tree test functions
+// 
+// 
+// 
+///
 
 
 template<typename Tree>
@@ -967,27 +955,30 @@ void test_setHash(const Tree& tree)
 
 namespace
 {
-	RivalTreeNodeBase* recurse(RivalTreeNodeBase* n, SizeType& current)
+	static bool tryGetNthNode(RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType target)
 	{
-		if (current == 0)
+		struct LOLMBDA
 		{
-			return n;
-		}
-		--current;
+			static RivalTreeNodeBase* recurse(RivalTreeNodeBase* n, SizeType& current)
+			{
+				if (current == 0)
+				{
+					return n;
+				}
+				--current;
 
-		for (SizeType i = 0; i < n->children.getSize(); i++)
-		{
-			if (RivalTreeNodeBase* result = recurse(n->children[i], current))
-				return result;
-		}
-		return NULL;
-	}
-	bool tryGetNthNode(RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType target)
-	{
-		result = recurse(root, target);
+				for (SizeType i = 0; i < n->children.getSize(); i++)
+				{
+					if (RivalTreeNodeBase* result = recurse(n->children[i], current))
+						return result;
+				}
+				return NULL;
+			}
+		};
+
+		result = LOLMBDA::recurse(root, target);
 		return result != NULL;
 	}
-
 }
 
 template<typename Tree>
@@ -1197,15 +1188,60 @@ void test_removeNode(Tree& tree, SizeType& nodeCount, SizeType child)
 	nodeCount = findCount(tree.root);
 }
 
-
-namespace
+template<typename Tree>
+void test_print_impl(const Tree& tree)
 {
-	static Transform getRandomTransform()
+#ifndef MAX_PERF
+	struct LOLMBDA
 	{
-	}
-};
+		static void recurse(Tree::Node* n, FlatHierarchy<Transform, TransformSorter>& result, SizeType depth = 0)
+		{
+			result.values.pushBack(n->value);
+			result.depths.pushBack((FlatHierarchy<Transform, TransformSorter>::DepthValue) depth);
+
+			for (SizeType i = 0; i < n->children.getSize(); i++)
+			{
+				recurse((Tree::Node*)n->children[i], result, depth + 1);
+			}
+		}
+	};
+
+	if (tree.root == NULL)
+		return;
+
+	FlatHierarchy<Transform, TransformSorter> temp;
+	LOLMBDA::recurse(tree.root, temp);
+
+	test_print(temp);
+#endif
+}
+
+void test_print(NaiveTree<Transform, TransformSorter>& tree)
+{
+	test_print_impl(tree);
+}
+void test_print(RivalTree<Transform, TransformSorter>& tree)
+{
+	test_print_impl(tree);
+}
 
 
+
+
+
+
+
+
+
+///
+// 
+// 
+// 
+//  Main test function
+// 
+// 
+// 
+///
 
 void test()
 {
