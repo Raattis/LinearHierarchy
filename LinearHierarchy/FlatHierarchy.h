@@ -703,7 +703,7 @@ public:
 
 	FLAT_VECTOR<ValueType> values;
 
-	FlatHierarchy(SizeType reserveSize)
+	FlatHierarchy(SizeType reserveSize = 0)
 	{
 		values.reserve(reserveSize);
 		depths.reserve(reserveSize);

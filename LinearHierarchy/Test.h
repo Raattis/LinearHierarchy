@@ -21,35 +21,24 @@
 typedef uint32_t SizeType;
 
 #ifdef _DEBUG
-const SizeType ArrBaseTestSizesCount = 5;
-const SizeType ArrTransformTestSizesCount = 6;
+const SizeType ArrTestSizesCount = 2;
 
-const SizeType DebugBaseTestRoundNumber = 10;
+const SizeType DebugBaseTestRoundNumber = 3;
 
 #elif defined(MAX_PERF)
-const SizeType ArrBaseTestSizesCount = 11;
-const SizeType ArrTransformTestSizesCount = 11;
+const SizeType ArrTestSizesCount = 11;
 
 #else
-const SizeType ArrBaseTestSizesCount = 11;
-const SizeType ArrTransformTestSizesCount = 11;
+const SizeType ArrTestSizesCount = 11;
 #endif
 
-const SizeType ArrBaseTestSizes[]          = { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
-//const SizeType ArrBaseTestRoundNumbers[]   = { 1000,  500,  500,    500,   100,  100,     30,   10,    5,     3,     3 };
-const SizeType ArrBaseTestRoundNumbers[] = { 100,    50,   20,     10,    10,   10,     10,    5,    3,     3,     2 };
-
-const SizeType ArrTransformTestSizes[]    =  { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
-const SizeType ArrTransformRoundNumbers[] =  { 1000,  1000, 500,  200,  200, 100,  100,  100,  50,  50,   50,   50 };
-//const SizeType ArrTransformRoundNumbers[]= {  100,    50,  20,   10,   10,  10,    5,    5,   5,   5,    5,   5 };
-
-const SizeType ArrRandomSeedsCount = 10000;
-SizeType ArrRandomSeeds[ArrRandomSeedsCount] = {};
+const SizeType ArrTestSizes[]          = { 10,     25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
+const SizeType ArrTestRoundNumbers[]   = { 1000,  500,  500,    500,   100,  100,     30,   10,    5,     3,     3 };
 
 #ifdef MAX_PERF
-const bool DoCacheFlushing = true;
+const bool DoCacheFlushing = false;
 const bool VerbosePrinting = false;
-const bool CheckHashes = false;
+const bool CheckHashes = true;
 const bool CheckCounts = false;
 #else
 const bool DoCacheFlushing = false;
@@ -66,25 +55,19 @@ enum
 	Flat3 = 1 << 2,
 	Rival = 1 << 3,
 	Naive = 1 << 4,
-	Flat1Transform = 1 << 5,
-	RivalTransform = 1 << 6,
-	NaiveTransform = 1 << 7,
-	Every = 1 << 8
+	Every = 1 << 5
 	};
 
 const uint32_t TestMask
 	=
-	//Flat1 |
-	//Flat2 |
-	//Flat3 |
-	//Rival |
+	Flat1 |
+	Flat2 |
+	Flat3 |
+	Rival |
 	Naive |
-	//Flat1Transform |
-	//RivalTransform |
-	//NaiveTransform |
 	//Every |
 #ifdef MAX_PERF
-	//Every |
+	Every |
 #endif
 	0;
 
@@ -103,48 +86,6 @@ const uint32_t TestMask
 #endif
 
 SizeType Rundi = 0;
-
-struct Handle
-{
-	union {
-		char text[4];
-		uint32_t number;
-	};
-
-	bool operator==(const Handle& other)
-	{
-		return number == other.number;
-	}
-	bool operator<(const Handle& other)
-	{
-		return number < other.number;
-	}
-
-	String toString() const
-	{
-		if (!this)
-			return String("NULL", 4);
-		return String(text, 4);
-	}
-};
-static_assert(sizeof(Handle) == 4, "Size of handle must be 4");
-
-struct HandleSorter
-{
-	static const bool UseSorting = true;
-
-	inline static bool isFirst(const Handle& a, const Handle& b) { return a.number < b.number; }
-};
-
-Handle getHandle(const char* ptr)
-{
-	return *reinterpret_cast<const Handle*>(ptr);
-}
-const char* getName(Handle handle, char* buffer)
-{
-	memcpy(buffer, &handle, 4);
-	return buffer;
-}
 
 struct Vector2
 {
@@ -211,6 +152,13 @@ struct Vector2
 
 struct Transform
 {
+#ifndef MAX_PERF
+	union
+	{
+		char name[4];
+		uint32_t nameInt;
+	};
+#endif
 	Vector2 pos;
 	Vector2 size;
 
@@ -222,6 +170,9 @@ struct Transform
 	Transform(const Transform& other)
 		: pos(other.pos)
 		, size(other.size)
+#ifndef MAX_PERF
+		, nameInt(other.nameInt)
+#endif
 	{
 	}
 	Transform(const Vector2& pos, const Vector2& size)
@@ -276,9 +227,9 @@ namespace // Logger
 	SizeType LogBufferProgress = 0;
 	void logTable(const char* msg)
 	{
-		SizeType l = (SizeType)strlen(msg);
-		memcpy(LogBuffer + LogBufferProgress, msg, l);
-		LogBufferProgress += l;
+		SizeType tree = (SizeType)strlen(msg);
+		memcpy(LogBuffer + LogBufferProgress, msg, tree);
+		LogBufferProgress += tree;
 	}
 	void logTableEnd()
 	{
@@ -310,8 +261,6 @@ namespace // Result storage
 		StatCountMax = 2,
 		StatDepthMax = 3,
 		StatAdd = 4,
-
-		// Base tests only
 		StatErase = 5,
 		StatMove = 6,
 		StatNthNode = 7,
@@ -320,56 +269,30 @@ namespace // Result storage
 		StatCalcCount = 10,
 		StatTravelDepth = 11,
 		StatTravelMax = 12,
-		StatBaseMax = 13,
-
-		// Transform tests only
-		StatTransformIt1 = 5,
-		StatTransformIt10 = 6,
-		StatTransformMax = 7,
+		StatTransformIt1 = 13,
+		StatTransformIt10 = 14,
+		StatMax = 15,
 	};
 
 	// tree type, tree size, statistics
-	double   baseTestStats[5][15][StatBaseMax] = {};
-	uint32_t baseTestCounts[5][15][StatBaseMax] = {};
-
-	double   trnsTestStats[3][15][StatTransformMax] = {};
-	uint32_t trnsTestCounts[3][15][StatTransformMax] = {};
+	double   baseTestStats[5][15][StatMax] = {};
+	uint32_t baseTestCounts[5][15][StatMax] = {};
 
 	uint32_t CurrentTreeType = 0;
 	uint32_t CurrentTreeSize = 0;
-	bool CurrentlyTestingTransforms = false;
 
 	double* getStat(StatNumber statNumber)
 	{
-		if (!CurrentlyTestingTransforms)
-		{
-			FLAT_ASSERT(statNumber < StatBaseMax);
-			++(baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
-			return &baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
-		}
-		else
-		{
-			FLAT_ASSERT(statNumber < StatTransformMax);
-			++(trnsTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
-			return &trnsTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
-		}
+		FLAT_ASSERT(statNumber < StatMax);
+		++(baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
+		return &baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
 	}
 	double maxStat(StatNumber statNumber, double value)
 	{
-		if (!CurrentlyTestingTransforms)
-		{
-			FLAT_ASSERT(statNumber < StatBaseMax);
-			if (baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] < value)
-				baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] = value;
-			return baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
-		}
-		else
-		{
-			FLAT_ASSERT(statNumber < StatTransformMax);
-			if (trnsTestStats[CurrentTreeType][CurrentTreeSize][statNumber] < value)
-				trnsTestStats[CurrentTreeType][CurrentTreeSize][statNumber] = value;
-			return trnsTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
-		}
+		FLAT_ASSERT(statNumber < StatMax);
+		if (baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] < value)
+			baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] = value;
+		return baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
 	}
 	double maxStat(StatNumber statNumber)
 	{
@@ -377,33 +300,15 @@ namespace // Result storage
 	}
 	double avgStat(StatNumber statNumber)
 	{
-		if (!CurrentlyTestingTransforms)
-		{
-			FLAT_ASSERT(statNumber < StatBaseMax);
-			if (baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber] == 0)
-				return 0;
-			return baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] / double(baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
-		}
-		else
-		{
-			FLAT_ASSERT(statNumber < StatTransformMax);
-			if (trnsTestCounts[CurrentTreeType][CurrentTreeSize][statNumber] == 0)
-				return 0;
-			return trnsTestStats[CurrentTreeType][CurrentTreeSize][statNumber] / double(trnsTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
-		}
+		FLAT_ASSERT(statNumber < StatMax);
+		if (baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber] == 0)
+			return 0;
+		return baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] / double(baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
 	}
 	SizeType countStat(StatNumber statNumber)
 	{
-		if (!CurrentlyTestingTransforms)
-		{
-			FLAT_ASSERT(statNumber < StatBaseMax);
-			return baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber];
-		}
-		else
-		{
-			FLAT_ASSERT(statNumber < StatTransformMax);
-			return trnsTestCounts[CurrentTreeType][CurrentTreeSize][statNumber];
-		}
+		FLAT_ASSERT(statNumber < StatMax);
+		return baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber];
 	}
 }
 
@@ -415,6 +320,10 @@ namespace
 	bool CheckingHashes = false;
 	SizeType CurrentHash = 0;
 	SizeType CurrentCounter = 0;
+
+	uint32_t testResultHashes[5] = {};
+
+	uint32_t runningHash = 0;
 
 	void setHash(uint32_t hash)
 	{
@@ -507,15 +416,24 @@ struct Random
 	static uint32_t index;
 	static uint32_t random;
 	static uint32_t counter;
+	static uint32_t defaultSeed;
 
-	static void init(uint32_t seed)
+	static void init(uint32_t seed = 0)
 	{
+		if (seed == 0)
+			seed = defaultSeed;
+
+
 		index = 624;
 		mt[0] = seed;
 		for (uint32_t i = 1; i < 624; ++i)
 		{
 			mt[i] = 1812433253 * (mt[i - 1] ^ (mt[i - 1] >> 30)) + i;
 		}
+
+		Random::Extract(); Random::index = 624; Random::Extract(); Random::index = 624;
+		Random::Extract(); Random::index = 624; Random::Extract(); Random::index = 624;
+		Random::Extract(); Random::index = 624; Random::Extract(); Random::index = 624;
 	}
 
 	static uint32_t Extract()
@@ -564,1130 +482,728 @@ uint32_t Random::mt[624] = {};
 uint32_t Random::index = 0;
 uint32_t Random::random = 0;
 uint32_t Random::counter = 0;
+uint32_t Random::defaultSeed = {};
 
-
-
-
-
-
-
-void baseTestEndPrints(double diff)
+void test_print(const FlatHierarchy<Transform, TransformSorter>& tree)
 {
-	printf("\n");
-	printf("adds: %d, erases: %d, moves: %d\n", countStat(StatAdd), countStat(StatErase), countStat(StatMove));
-	//printf("%.4f s, adds: %d, erases: %d, moves: %d\n", diff, countStat(StatAdd), countStat(StatErase), countStat(StatMove));
-	printf("average count: %.1lf, depth: %.1lf, max count: %.0lf, depth: %.0lf\n", avgStat(StatCountAvg), avgStat(StatDepthAvg), maxStat(StatCountMax), maxStat(StatDepthMax));
-	printf("average travel depth: %.1lf\n", avgStat(StatTravelDepth));
-
-	printf("\n\n\n");
-
-#define PRTINT_HALP(p) countStat(Stat ## p), avgStat( Stat ## p)
-	printf("Average Add        -\t%d\t-  %.4lf us\n", PRTINT_HALP(Add));
-	printf("Average Move       -\t%d\t-  %.4lf us\n", PRTINT_HALP(Move));
-	printf("Average Erase      -\t%d\t-  %.4lf us\n", PRTINT_HALP(Erase));
-	printf("Average CalcDepth  -\t%d\t-  %.4lf us\n", PRTINT_HALP(CalcDepth));
-	printf("Average CalcCount  -\t%d\t-  %.4lf us\n", PRTINT_HALP(CalcCount));
-	printf("Average NthNode    -\t%d\t-  %.4lf us\n", PRTINT_HALP(NthNode));
-	printf("Average LeafTravel -\t%d\t-  %.4lf us\n", PRTINT_HALP(LeafTravel));
-#undef PRTINT_HALP
-
-	printf("\n");
-}
-
-
-
-void FLAT_Test()
-{
-	typedef FlatHierarchy<Handle, HandleSorter> HierarchyType;
-
-	struct FLUSHER
+#ifndef MAX_PERF
+	struct LOLMBDA
 	{
-		static void flush(HierarchyType& t)
+		static const char* getName(Transform& t, char* buffer)
 		{
-			flushCache(t.depths.buffer);
-			flushCache(t.values.buffer);
-			flushCache(&t);
-		}
-	};
-	#define FLUSH_CACHE FLUSHER::flush(l);
-
-	struct PRINT
-	{
-		static void print(const HierarchyType& l)
-		{
-			printf("\n");
-			for (SizeType c = 0; c < l.getCount(); c++)
-			{
-				char buffer[5];
-				buffer[4] = '\0';
-				printf("%s", getName(l.values[c], buffer));
-			}
-			printf("\n");
-			for (SizeType c = 0; c < l.getCount(); c++)
-			{
-				if (l.depths[c] < 10)
-					printf("  %u ", l.depths[c]);
-				else
-					printf(" %u ", l.depths[c]);
-			}
-			printf("\n");
-			for (SizeType c = 0; c < l.getCount() + 1; c++)
-			{
-				printf("----");
-			}
-
-			printf("\n");
-			for (SizeType c = 0; c < l.getCount(); c++)
-			{
-				if (c < 10)
-					printf(" %d  ", c);
-				else
-					printf(" %d ", c);
-			}
-
-			printf("\n");
-
-
-			char buffer[4096];
-			for (SizeType r = 0, end = l.findMaxDepth() + 1; r < end; r++)
-			{
-				buffer[l.getCount() * 4] = '\0';
-
-				// Iterate columns backwards to benefit from linear parent lookup
-				for (SizeType c = 0; c < l.getCount(); ++c)
-				{
-					bool hasDirectChildren = false;
-
-					for (SizeType i = c + 1; i < l.getCount(); i++)
-					{
-						if (l.depths[i] > r + 1)
-							continue;
-						hasDirectChildren = l.depths[i] == r + 1;
-						break;
-					}
-
-					if (l.depths[c] == r)
-						getName(l.values[c], buffer + c * 4);
-					else if (l.depths[c] == r + 1)
-						memcpy(buffer + c * 4, (hasDirectChildren ? "„¦„Ÿ" : "„¢  "), 4);
-					else if (l.depths[c] > r && hasDirectChildren)
-						memcpy(buffer + c * 4, "„Ÿ„Ÿ", 4);
-					else
-						memcpy(buffer + c * 4, "    ", 4);
-				}
-				printf("%s\n", buffer);
-			}
-			printf("\n");
+			memcpy(buffer, t.name, 4);
+			return buffer;
 		}
 	};
 
-	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrBaseTestSizesCount; fullRoundNumber++)
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount(); c++)
 	{
-		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
-
-		CurrentTreeSize = fullRoundNumber;
-
-		SizeType COUNT = 0;
-
-		HierarchyType l(70);
-		l.createRootNode(getHandle("Root"));
-
-		LastDescendantCache descendantCache;
-		NextSiblingCache siblingCache;
-
-		COUNT += 1;
-
-		const SizeType targetCount = (SizeType)ArrBaseTestSizes[fullRoundNumber];
-
-		printf("\n%s tree base test\n", (FLAT_NO_CACHE_CONDITION) ? "Flat" : (FLAT_CACHE_CONDITION) ? "Cached flat" : "Cold cached flat");
-		printf("Node count: %u\n\n", targetCount);
-
-#ifdef _DEBUG
-		const SizeType RoundNumber = DebugBaseTestRoundNumber;
-#else
-		const SizeType RoundNumber = ArrBaseTestRoundNumbers[fullRoundNumber];
-#endif
-
-		for (SizeType j = 0; j < RoundNumber; j++)
-		{
-			if (ArrBaseTestRoundNumbers[fullRoundNumber] <= 700)
-				printf(".");
-
-			// Add
-
-			while (COUNT < targetCount)
-			{
-				char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
-				Handle handle = getHandle(name);
-
-				SizeType parent = Random::get(0, COUNT);
-				if (VerbosePrinting)
-				{
-					char buffer[5]; buffer[4] = '\0';
-					char buffer2[5]; buffer2[4] = '\0';
-					printf("Add %s to #%d \"%s\"\n", getName(handle, buffer), parent, getName(l.values[parent], buffer2));
-				}
-
-				{
-
-					descendantCache.cacheIsValid = false;
-					if (FLAT_CACHE_CONDITION)
-						descendantCache.makeCacheValid(l);
-
-					FLUSH_CACHE
-					ScopedProfiler p(getStat(StatAdd));
-					if (FLAT_NO_CACHE_CONDITION)
-						l.createNodeAsChildOf(parent, handle);
-					else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
-						createNodeAsChildOf(l, descendantCache, parent, handle);
-					else
-						FLAT_ASSERT(!"No condition matched.");
-				}
-
-				++COUNT;
-
-				if (CheckHashes && CurrentHash < HashBufferSize)
-				{
-					setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
-				}
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					setCount(l.getCount());
-				}
-			}
-
-			// Move
-
-			for (SizeType doMoves = 0; doMoves < targetCount * 0.1 || doMoves < 2; doMoves++)
-			{
-				SizeType parent = Random::get(1, COUNT - 2);
-				SizeType child = Random::get(parent + 2, COUNT);
-				FLAT_ASSERT(parent < child);
-
-				if (VerbosePrinting)
-				{
-					PRINT::print(l);
-					char buffer[5]; buffer[4] = '\0';
-					char buffer2[5]; buffer2[4] = '\0';
-					printf("Make #%d \"%s\" into #%d \"%s\"'s child\n", child, getName(l.values[child], buffer), parent, getName(l.values[parent], buffer2));
-				}
-
-				{
-					descendantCache.cacheIsValid = false;
-					if (FLAT_CACHE_CONDITION)
-						descendantCache.makeCacheValid(l);
-
-					FLUSH_CACHE
-					ScopedProfiler p(getStat(StatMove));
-					if (FLAT_NO_CACHE_CONDITION)
-						l.makeChildOf(child, parent);
-					else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
-						makeChildOf(l, descendantCache, child, parent);
-					else
-						FLAT_ASSERT(!"No condition matched");
-				}
-
-				if (CheckHashes && CurrentHash < HashBufferSize)
-				{
-					setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
-				}
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					setCount(l.getCount());
-				}
-
-				if (VerbosePrinting)
-				{
-					PRINT::print(l);
-				}
-			}
-
-			// Travel
-
-			siblingCache.cacheIsValid = false; // Invalidate cache before starting to travel, just in case
-			if (FLAT_CACHE_CONDITION)
-				siblingCache.makeCacheValid(l);
-
-			for (SizeType doTravels = 0; doTravels < targetCount * 0.2; doTravels++)
-			{
-				// travel to leaf
-
-				SizeType travelLoopCount = 0;
-				SizeType current = 0;
-				SizeType childCount = 0;
-
-				if (FLAT_CACHE_UNPREP_CONDITION)
-					siblingCache.cacheIsValid = false;
-
-				FLUSH_CACHE
-				ScopedProfiler prof(getStat(StatLeafTravel));
-
-				if (FLAT_NO_CACHE_CONDITION)
-					childCount = countDirectChildren(l, current);
-				else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
-					childCount = countDirectChildren(l, siblingCache, current);
-				else
-					FLAT_ASSERT(!"No condition matched");
-
-
-				// Loop until in leaf
-				while (childCount > 0)
-				{
-					++travelLoopCount;
-					if (FLAT_NO_CACHE_CONDITION)
-					{
-						current = getNthChild(l, current, Random::get(0, childCount));
-						childCount = countDirectChildren(l, current);
-					}
-					else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
-					{
-						current = getNthChild(l, siblingCache, current, Random::get(0, childCount));
-						childCount = countDirectChildren(l, siblingCache, current);
-					}
-					else
-					{
-						FLAT_ASSERT(!"No condition matched");
-					}
-				}
-
-				*getStat(StatTravelDepth) += travelLoopCount;
-				maxStat(StatTravelMax, travelLoopCount);
-
-				if (CheckHashes && CurrentHash < HashBufferSize)
-				{
-					setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
-				}
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					setCount(l.getCount());
-				}
-			}
-
-			// Find depth and count
-			for (SizeType doFind = 0; doFind < targetCount * 0.1; doFind++)
-			{
-				SizeType depth = 0;
-				SizeType count = 0;
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatCalcDepth));
-					depth = l.findMaxDepth();
-				}
-
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatCalcCount));
-					count = l.getCount();
-				}
-
-				*getStat(StatCountAvg) += count;
-				*getStat(StatDepthAvg) += depth;
-
-				maxStat(StatCountMax, count);
-				maxStat(StatDepthMax, depth);
-			}
-
-			// Erase
-
-			while (COUNT > targetCount * 0.8 && COUNT > 2)
-			{
-				FLAT_ASSERT(COUNT > 1);
-				SizeType child = Random::get(1, COUNT);
-
-				if (VerbosePrinting)
-				{
-					printf("Erase: %d\n", child);
-				}
-
-				{
-					descendantCache.cacheIsValid = false;
-					if (FLAT_CACHE_CONDITION)
-						descendantCache.makeCacheValid(l);
-
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatErase));
-					if (FLAT_NO_CACHE_CONDITION)
-						l.erase(child);
-					else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
-						erase(l, descendantCache, child);
-					else
-						FLAT_ASSERT(!"ASDF!!! No condition matched");
-				}
-
-				COUNT = l.getCount();
-
-				if (CheckHashes && CurrentHash < HashBufferSize)
-				{
-					setHash(SuperFastHash((char*)l.depths.getPointer(), l.getCount() * sizeof(HierarchyType::DepthValue)));
-				}
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					setCount(l.getCount());
-				}
-			}
-		}
-
-		baseTestEndPrints(0);
+		char buffer[5];
+		buffer[4] = '\0';
+		printf("%s ", LOLMBDA::getName(tree.values[c], buffer));
 	}
-}
-
-
-bool tryGetNthNode(const RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType n)
-{
-	struct TEMP
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount(); c++)
 	{
-		static bool recurse(const RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType& n)
-		{
-			if (n == 0)
-			{
-				result = const_cast<RivalTreeNodeBase*>(root);
-				return true;
-			}
-			--n;
+		if (tree.depths[c] < 10)
+			printf("  %u  ", tree.depths[c]);
+		else
+			printf("  %u ", tree.depths[c]);
+	}
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount() + 1; c++)
+	{
+		printf("-----");
+	}
 
-			for (SizeType i = 0; i < root->children.getSize(); i++)
+	printf("\n");
+	for (SizeType c = 0; c < tree.getCount(); c++)
+	{
+		if (c < 10)
+			printf("  %d  ", c);
+		else
+			printf("  %d ", c);
+	}
+
+	printf("\n");
+
+
+	char buffer[4096];
+	for (SizeType r = 0, end = tree.findMaxDepth() + 1; r < end; r++)
+	{
+		buffer[tree.getCount() * 5] = '\0';
+
+		// Iterate columns backwards to benefit from linear parent lookup
+		for (SizeType c = 0; c < tree.getCount(); ++c)
+		{
+			bool hasDirectChildren = false;
+
+			for (SizeType i = c + 1; i < tree.getCount(); i++)
 			{
-				if (recurse(root->children[i], result, n))
-					return true;
+				if (tree.depths[i] > r + 1)
+					continue;
+				hasDirectChildren = tree.depths[i] == r + 1;
+				break;
 			}
-			return false;
+
+			if (tree.depths[c] == r)
+			{
+				LOLMBDA::getName(tree.values[c], buffer + c * 5);
+				*(buffer + c * 5 + 4) = ' ';
+			}
+			else if (tree.depths[c] == r + 1)
+				memcpy(buffer + c * 5, (hasDirectChildren ? "-v---" : "-v   "), 5);
+			else if (tree.depths[c] > r && hasDirectChildren)
+				memcpy(buffer + c * 5, "-----", 5);
+			else
+				memcpy(buffer + c * 5, "     ", 5);
 		}
-	};
-	SizeType counter = n;
-	bool success = TEMP::recurse(root, result, counter);
-	FLAT_ASSERTF(success, "Failed to get node with N: %u", n);
-	return success;
+		printf("%s\n", buffer);
+	}
+	printf("\n");
+#endif
 }
 
 template<typename Tree>
-void Other_Tree_Test_Impl()
+void test_print_impl(const Tree& tree)
 {
-	typedef Tree::Node Node;
-
-	struct FLUSHER
+#ifndef MAX_PERF
+	struct LOLMBDA
 	{
-		static void flush(Tree& t)
+		static void recurse(Tree::Node* n, FlatHierarchy<Transform, TransformSorter>& result, SizeType depth = 0)
 		{
-			Node* n = t.root;
-			flushCache(n);
-			flushCache(&t);
-		}
-	};
-	#undef FLUSH_CACHE
-	#define FLUSH_CACHE FLUSHER::flush(tree);
+			result.values.pushBack(n->value);
+			result.depths.pushBack((FlatHierarchy<Transform, TransformSorter>::DepthValue) depth);
 
-	struct PRINT
-	{
-		static void print(const Tree& tree)
-		{
-			struct Temp
+			for (SizeType i = 0; i < n->children.getSize(); i++)
 			{
-				static void recurse(const RivalTreeNodeBase& node, SizeType& column, SizeType row = 0)
-				{
-					for (SizeType i = 1; i < row; i++)
-					{
-						printf("  ");
-					}
-					if (row > 0)
-					{
-						if (node.rightSibling) // Next sibling exists
-						{
-							printf("„¥");
-						}
-						else
-						{
-							printf("„¤");
-						}
-					}
-
-
-					char buffer[5];
-					buffer[4] = '\0';
-					printf("%s\n", getName(((Node&)node).value, buffer));
-
-					++column;
-
-					for (SizeType i = 0; i < node.children.getSize(); i++)
-					{
-						recurse(*node.children[i], column, row + 1);
-					}
-				}
-
-			};
-
-			SizeType col = 0;
-			Temp::recurse(*tree.root, col);
-			printf("\n");
+				recurse((Tree::Node*)n->children[i], result, depth + 1);
+			}
 		}
 	};
 
-#ifdef MAX_PERF
-	const bool enableSanityChecks = false;
-#else
-	const bool enableSanityChecks = true;
+	if (tree.root == NULL)
+		return;
+
+	FlatHierarchy<Transform, TransformSorter> temp;
+	LOLMBDA::recurse(tree.root, temp);
+
+	test_print(temp);
 #endif
+}
 
-	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrBaseTestSizesCount; fullRoundNumber++)
+void test_print(NaiveTree<Transform, TransformSorter>& tree)
+{
+	test_print_impl(tree);
+}
+void test_print(RivalTree<Transform, TransformSorter>& tree)
+{
+	test_print_impl(tree);
+}
+
+template<typename Tree>
+void testTree()
+{
+	CurrentHash = 0;
+	CurrentCounter = 0;
+	runningHash = 0;
+
+	Random::init();
+
+	for (SizeType arrSizeIndex = 0; arrSizeIndex < ArrTestSizesCount; ++arrSizeIndex)
 	{
-		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
-
-		CurrentTreeSize = fullRoundNumber;
-
-		SizeType COUNT = 0;
-
-		Tree tree;
-		tree.root = tree.createNode(getHandle("Root"), NULL);
-
-		COUNT += 1;
-
-		const SizeType targetCount = (SizeType)ArrBaseTestSizes[fullRoundNumber];
-
-		printf("\n%s tree base test\n", sizeof(Tree) == sizeof(NaiveTree<Handle, HandleSorter>) ? "Naive" : "Pooled");
-		printf("Node count: %u\n\n", targetCount);
+		const SizeType TestNodeCount = ArrTestSizes[arrSizeIndex];
 
 #ifdef _DEBUG
-		const SizeType RoundNumber = DebugBaseTestRoundNumber;
+		const SizeType TestRepeatCount = DebugBaseTestRoundNumber < ArrTestRoundNumbers[arrSizeIndex] ? DebugBaseTestRoundNumber : 2;
 #else
-		const SizeType RoundNumber = ArrBaseTestRoundNumbers[fullRoundNumber];
+		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
 #endif
 
-		for (SizeType j = 0; j < RoundNumber; j++)
+		printf("\nTest size: %d\n", TestNodeCount);
+		Tree t;
+
+		for (SizeType repeatNumber = 0; repeatNumber < TestRepeatCount; repeatNumber++)
 		{
-			if (ArrBaseTestRoundNumbers[fullRoundNumber] <= 700)
-				printf(".");
+			test_createTree(t);
+			SizeType nodeCount = 1;
 
-			// Add
+			printf("\rProgress:\t%d / %d,\tcurrentHash: %x", repeatNumber + 1, TestRepeatCount, runningHash);
 
-			while (COUNT < targetCount)
+			for (SizeType i = nodeCount; i < TestNodeCount; i++)
 			{
-				char name[4] = { 'A' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26), 'a' + (char)Random::get(0,26) };
-				Handle handle = getHandle(name);
+				SizeType x = Random::get(0, 900);
+				SizeType y = Random::get(0, 900);
+				SizeType w = Random::get(100, 1000 - x);
+				SizeType h = Random::get(100, 1000 - y);
 
-				SizeType parent = Random::get(0, COUNT);
-				Node* parentNode = NULL;
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatNthNode));
-					bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parent);
-					FLAT_ASSERT(success);
-				}
-				FLAT_ASSERT(parent == 0 || isChildOf(parentNode, tree.root));
+				Transform value(x / 1000.0f, y / 1000.0f, w / 1000.0f, h / 1000.0f);
+#ifndef MAX_PERF
+				value.name[0] = (char)Random::get('A', 'Z'); value.name[1] = (char)Random::get('a', 'z');
+				value.name[2] = (char)Random::get('a', 'z'); value.name[3] = (char)Random::get('a', 'z');
+#endif
+
+				SizeType parentIndex = Random::get(0, nodeCount);
+				test_addChild(t, nodeCount, parentIndex, value);
+				++nodeCount;
 
 				if (VerbosePrinting)
 				{
-					char buffer[5]; buffer[4] = '\0';
-					char buffer2[5]; buffer2[4] = '\0';
-					printf("Add %s to #%d \"%s\"\n", getName(handle, buffer), parent, getName(parentNode->value, buffer2));
+					test_print(t);
 				}
 
-				if (enableSanityChecks)
+				if (CheckHashes)
 				{
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-					}
-					tree.root->sanityCheck();
-				}
-
-				Node* node = NULL;
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatAdd));
-					node = tree.createNode(handle, parentNode);
-				}
-				FLAT_ASSERT(isChildOf(node, tree.root));
-
-				++COUNT;
-
-				if (enableSanityChecks)
-				{
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-					}
-					tree.root->sanityCheck();
-				}
-
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					SizeType oldCount = COUNT;
-					COUNT = findCount(tree.root);
-					FLAT_ASSERT(oldCount == COUNT);
-
-					setCount(COUNT);
+					test_setHash(t);
 				}
 			}
 
-			// Move
-
-			for (SizeType doMoves = 0; doMoves < targetCount * 0.1 || doMoves < 2; doMoves++)
+			for (SizeType doMoves = 0; doMoves < TestNodeCount * 0.1 || doMoves < 2; doMoves++)
 			{
-				SizeType parent = Random::get(1, COUNT - 2);
-				SizeType child = Random::get(parent + 2, COUNT);
-				FLAT_ASSERT(parent < child);
+				SizeType parent = Random::get(1, nodeCount - 2);
+				SizeType child = Random::get(parent + 2, nodeCount);
+				test_moveChildren(t, nodeCount, child, parent);
 
+				if (CheckHashes)
 				{
-					Node* node = NULL;
-					Node* parentNode = NULL;
-					{
-						FLUSH_CACHE
-						ScopedProfiler prof(getStat(StatNthNode));
-						bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
-						FLAT_ASSERT(success);
-					}
-					{
-						FLUSH_CACHE
-						ScopedProfiler prof(getStat(StatNthNode));
-						bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parent);
-						FLAT_ASSERT(success);
-					}
+					test_setHash(t);
+				}
+			}
+			for (SizeType doTravels = 0; doTravels < TestNodeCount * 0.2; doTravels++)
+			{
+				test_travelToLeaf(t, nodeCount);
+			}
+			for (SizeType doFind = 0; doFind < TestNodeCount * 0.1; doFind++)
+			{
+				test_findDepthAndCount(t, nodeCount);
+			}
 
-					FLAT_ASSERT(child != 0 || isChildOf(parentNode, node));
-
-					if (isChildOf(parentNode, node))
-					{
-						Node* temp = node;
-						node = parentNode;
-						parentNode = temp;
-					}
-
-					FLAT_ASSERT(!isChildOf(parentNode, node));
-
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-						char buffer[5]; buffer[4] = '\0';
-						char buffer2[5]; buffer2[4] = '\0';
-						printf("Make #%d \"%s\" into #%d \"%s\"'s child\n", child, getName(node->value, buffer), parent, getName(parentNode->value, buffer2));
-					}
-
-					{
-						FLAT_ASSERT(node != tree.root);
-						FLUSH_CACHE
-						ScopedProfiler prof(getStat(StatMove));
-						tree.makeChildOf(node, parentNode);
-					}
-
-					FLAT_ASSERT(!isChildOf(parentNode, node));
-
-
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-					}
-					if (enableSanityChecks)
-					{
-						tree.root->sanityCheck();
-					}
-
-					if (CheckCounts && CurrentCounter < HashBufferSize)
-					{
-						SizeType oldCount = COUNT;
-						COUNT = findCount(tree.root);
-						FLAT_ASSERT(oldCount == COUNT);
-
-						setCount(COUNT);
-					}
+			test_multiplyTransforms(t, nodeCount, 3);
+			
+			while (nodeCount > TestNodeCount * 0.8 && nodeCount > 2)
+			{
+				SizeType child = Random::get(1, nodeCount);
+				test_removeNode(t, nodeCount, child);
+				if (CheckHashes)
+				{
+					test_setHash(t);
 				}
 			}
 
-			// Travel
-
-			for (SizeType doTravels = 0; doTravels < targetCount * 0.2; doTravels++)
 			{
-				// travel to leaf
-
-				FLUSH_CACHE
-				ScopedProfiler prof(getStat(StatLeafTravel));
-
-				Node* currentNode = tree.root;
-
-				SizeType travelLoopCount = 0;
-
-				// Loop until in leaf
-				while (currentNode->children.getSize() > 0)
-				{
-					++travelLoopCount;
-					currentNode = (Node*)currentNode->children[Random::get(0, currentNode->children.getSize())];
-				}
-
-				*getStat(StatTravelDepth) += travelLoopCount;
-				maxStat(StatTravelMax, travelLoopCount);
-
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					SizeType oldCount = COUNT;
-					COUNT = findCount(tree.root);
-					FLAT_ASSERT(oldCount == COUNT);
-
-					setCount(COUNT);
-				}
-			}
-
-			// Find depth and count
-			for (SizeType doFind = 0; doFind < targetCount * 0.1; doFind++)
-			{
-				SizeType depth = 0;
-				SizeType count = 0;
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatCalcDepth));
-					depth = findDepth(tree.root);
-				}
-
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatCalcCount));
-					count = findCount(tree.root);
-				}
-
-				*getStat(StatCountAvg) += count;
-				*getStat(StatDepthAvg) += depth;
-
-				maxStat(StatCountMax, count);
-				maxStat(StatDepthMax, depth);
-			}
-
-			// Erase
-
-			while (COUNT > targetCount * 0.8 && COUNT > 2)
-			{
-				FLAT_ASSERT(COUNT > 1);
-				SizeType child = Random::get(1, COUNT);
-
-				if (VerbosePrinting)
-				{
-					printf("Erase: %d\n", child);
-				}
-
-				Node* node = NULL;
-
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatNthNode));
-					bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
-					FLAT_ASSERT(success);
-				}
-				FLAT_ASSERT(node != tree.root);
-
-
-				{
-					isChildOf(node, tree.root);
-
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatErase));
-					tree.eraseNode(node);
-				}
-
-				COUNT = findCount(tree.root);
-
-				if (enableSanityChecks)
-				{
-					if (VerbosePrinting)
-					{
-						PRINT::print(tree);
-					}
-					tree.root->sanityCheck();
-				}
-
-				if (CheckCounts && CurrentCounter < HashBufferSize)
-				{
-					SizeType oldCount = COUNT;
-					COUNT = findCount(tree.root);
-					FLAT_ASSERT(oldCount == COUNT);
-
-					setCount(COUNT);
-				}
+				test_removeNode(t, nodeCount, 0);
 			}
 		}
 
-		baseTestEndPrints(0);
+		test_print(t);
+
+		testResultHashes[CurrentTreeType] = runningHash;
+		printf("\n\nResultHash: %x\n", runningHash);
+		printf("adds: %d, erases: %d, moves: %d\n", countStat(StatAdd), countStat(StatErase), countStat(StatMove));
+		printf("average count: %.1lf, depth: %.1lf, max count: %.0lf, depth: %.0lf\n", avgStat(StatCountAvg), avgStat(StatDepthAvg), maxStat(StatCountMax), maxStat(StatDepthMax));
+		printf("average travel depth: %.1lf\n", avgStat(StatTravelDepth));
+
+		printf("\n\n\n");
+
+#define PRTINT_HALP(p) countStat(Stat ## p), avgStat( Stat ## p)
+		printf("Average Add         -\t%d\t-  %.4lf us\n", PRTINT_HALP(Add));
+		printf("Average Move        -\t%d\t-  %.4lf us\n", PRTINT_HALP(Move));
+		printf("Average Erase       -\t%d\t-  %.4lf us\n", PRTINT_HALP(Erase));
+		printf("Average CalcDepth   -\t%d\t-  %.4lf us\n", PRTINT_HALP(CalcDepth));
+		printf("Average CalcCount   -\t%d\t-  %.4lf us\n", PRTINT_HALP(CalcCount));
+		printf("Average NthNode     -\t%d\t-  %.4lf us\n", PRTINT_HALP(NthNode));
+		printf("Average LeafTravel  -\t%d\t-  %.4lf us\n", PRTINT_HALP(LeafTravel));
+		printf("Average Transform1  -\t%d\t-  %.4lf us\n", PRTINT_HALP(TransformIt1));
+		printf("Average Transform10 -\t%d\t-  %.4lf us\n", PRTINT_HALP(TransformIt10));
+#undef PRTINT_HALP
+
+		printf("\n");
+
+	}
+
+	CheckingHashes = true;
+}
+
+
+void test_createTree(FlatHierarchy<Transform, TransformSorter>& tree)
+{
+	Transform t;
+#ifndef MAX_PERF
+	t.nameInt = *reinterpret_cast<SizeType*>("Root");
+#endif
+	FLAT_ASSERT(tree.getCount() == 0);
+	tree.createRootNode(t);
+}
+
+void test_setHash(const FlatHierarchy<Transform, TransformSorter>& tree)
+{
+	runningHash ^= SuperFastHash((char*)tree.values.getPointer(), tree.values.getSize() * sizeof(Transform));
+	if (CurrentHash < HashBufferSize)
+	{
+		setHash(runningHash);
+	}
+}
+
+void test_addChild(FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType parentIndex, const Transform& value)
+{
+	LastDescendantCache descendantCache;
+	descendantCache.cacheIsValid = false;
+	if (FLAT_CACHE_CONDITION)
+		descendantCache.makeCacheValid(tree);
+
+	shuffleMemory();
+	ScopedProfiler p(getStat(StatAdd));
+	if (FLAT_NO_CACHE_CONDITION)
+		tree.createNodeAsChildOf(parentIndex, value);
+	else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
+		createNodeAsChildOf(tree, descendantCache, parentIndex, value);
+	else
+		FLAT_ASSERT(!"No condition matched.");
+}
+
+void test_moveChildren(FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType childIndex, SizeType newParentIndex)
+{
+	FLAT_ASSERT(newParentIndex < childIndex);
+
+	LastDescendantCache descendantCache;
+	descendantCache.cacheIsValid = false;
+	if (FLAT_CACHE_CONDITION)
+		descendantCache.makeCacheValid(tree);
+
+	ScopedProfiler p(getStat(StatMove));
+	if (FLAT_NO_CACHE_CONDITION)
+		tree.makeChildOf(childIndex, newParentIndex);
+	else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
+		makeChildOf(tree, descendantCache, childIndex, newParentIndex);
+	else
+		FLAT_ASSERT(!"No condition matched");
+}
+
+void test_travelToLeaf(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount)
+{
+	// travel to leaf
+
+	SizeType travelLoopCount = 0;
+	SizeType current = 0;
+	SizeType childCount = 0;
+
+	NextSiblingCache siblingCache;
+
+	siblingCache.cacheIsValid = false; // Invalidate cache before starting to travel, just in case
+	if (FLAT_CACHE_CONDITION)
+		siblingCache.makeCacheValid(tree);
+
+	if (FLAT_CACHE_UNPREP_CONDITION)
+		siblingCache.cacheIsValid = false;
+
+	ScopedProfiler prof(getStat(StatLeafTravel));
+
+	if (FLAT_NO_CACHE_CONDITION)
+		childCount = countDirectChildren(tree, current);
+	else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
+		childCount = countDirectChildren(tree, siblingCache, current);
+	else
+		FLAT_ASSERT(!"No condition matched");
+
+
+	// Loop until in leaf
+	while (childCount > 0)
+	{
+		++travelLoopCount;
+		if (FLAT_NO_CACHE_CONDITION)
+		{
+			current = getNthChild(tree, current, Random::get(0, childCount));
+			childCount = countDirectChildren(tree, current);
+		}
+		else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
+		{
+			current = getNthChild(tree, siblingCache, current, Random::get(0, childCount));
+			childCount = countDirectChildren(tree, siblingCache, current);
+		}
+		else
+		{
+			FLAT_ASSERT(!"No condition matched");
+		}
+	}
+
+	*getStat(StatTravelDepth) += travelLoopCount;
+	maxStat(StatTravelMax, travelLoopCount);
+}
+
+void test_findDepthAndCount(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount)
+{
+	SizeType depth = 0;
+	SizeType count = 0;
+	{
+		ScopedProfiler prof(getStat(StatCalcDepth));
+		depth = tree.findMaxDepth();
+	}
+
+	{
+		ScopedProfiler prof(getStat(StatCalcCount));
+		count = tree.getCount();
+	}
+	FLAT_ASSERT(count == nodeCount);
+
+	*getStat(StatCountAvg) += count;
+	*getStat(StatDepthAvg) += depth;
+
+	maxStat(StatCountMax, count);
+	maxStat(StatDepthMax, depth);
+}
+
+void test_multiplyTransforms(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, const SizeType TransformIterations)
+{
+	if (CurrentTreeType != 0)
+		return;
+
+	FLAT_VECTOR<Transform> resultTransforms;
+	resultTransforms.reserve(nodeCount);
+
+	Transform tempBuffer[256];
+	FLAT_ASSERT(tree.findMaxDepth() + 1 < 256);
+
+	{
+		// Only log first and last iterations
+
+		ScopedProfiler prof(getStat(StatTransformIt1));
+
+		resultTransforms.pushBack(tree.values[0]);
+		tempBuffer[0] = tree.values[0];
+
+		for (SizeType i = 1, end = tree.getCount(); i < end; i++)
+		{
+			FLAT_ASSERT(tree.depths[i] > 0);
+			Transform myTransform = Transform::multiply(tempBuffer[tree.depths[i] - 1], tree.values[i]);
+			resultTransforms.pushBack(myTransform);
+			tempBuffer[tree.depths[i]] = myTransform;
+		}
+	}
+
+	for (SizeType iteration = 1; iteration + 1 < TransformIterations; ++iteration)
+	{
+		resultTransforms.clear();
+		resultTransforms.pushBack(tree.values[0]);
+		tempBuffer[0] = tree.values[0];
+
+		for (SizeType i = 1, end = tree.getCount(); i < end; i++)
+		{
+			FLAT_ASSERT(tree.depths[i] > 0);
+			Transform myTransform = Transform::multiply(tempBuffer[tree.depths[i] - 1], tree.values[i]);
+			resultTransforms.pushBack(myTransform);
+			tempBuffer[tree.depths[i]] = myTransform;
+		}
+	}
+
+	{
+		// Only log first and last iterations
+		resultTransforms.clear();
+
+		ScopedProfiler prof(getStat(StatTransformIt10), true);
+
+		resultTransforms.pushBack(tree.values[0]);
+		tempBuffer[0] = tree.values[0];
+
+		for (SizeType i = 1, end = tree.getCount(); i < end; i++)
+		{
+			FLAT_ASSERT(tree.depths[i] > 0);
+			Transform myTransform = Transform::multiply(tempBuffer[tree.depths[i] - 1], tree.values[i]);
+			resultTransforms.pushBack(myTransform);
+			tempBuffer[tree.depths[i]] = myTransform;
+		}
+	}
+}
+
+void test_removeNode(FlatHierarchy<Transform, TransformSorter>& tree, SizeType& nodeCount, SizeType index)
+{
+	tree.erase(index);
+	nodeCount = tree.getCount();
+}
+
+
+
+
+
+
+
+
+template<typename Tree>
+void test_createTree(Tree& tree)
+{
+	Transform t;
+#ifndef MAX_PERF
+	t.nameInt = *reinterpret_cast<SizeType*>("Root");
+#endif
+	FLAT_ASSERT(tree.root == NULL);
+	tree.root = tree.createNode(t, NULL);
+}
+
+template<typename Tree>
+void test_setHash(const Tree& tree)
+{
+	struct HASH_GATHER
+	{
+		static void recurse(Tree::Node* n, FLAT_VECTOR<Transform>& result)
+		{
+			result.pushBack(n->value);
+
+			for (SizeType i = 0; i < n->children.getSize(); i++)
+			{
+				recurse((Tree::Node*)n->children[i], result);
+			}
+		}
+	};
+
+	FLAT_VECTOR<Transform> result;
+	HASH_GATHER::recurse(tree.root, result);
+
+	runningHash ^= SuperFastHash((char*)result.getPointer(), result.getSize() * sizeof(Transform));
+	if (CurrentHash < HashBufferSize)
+	{
+		setHash(runningHash);
+	}
+}
+
+namespace
+{
+	RivalTreeNodeBase* recurse(RivalTreeNodeBase* n, SizeType& current)
+	{
+		if (current == 0)
+		{
+			return n;
+		}
+		--current;
+
+		for (SizeType i = 0; i < n->children.getSize(); i++)
+		{
+			if (RivalTreeNodeBase* result = recurse(n->children[i], current))
+				return result;
+		}
+		return NULL;
+	}
+	bool tryGetNthNode(RivalTreeNodeBase* root, RivalTreeNodeBase*& result, SizeType target)
+	{
+		result = recurse(root, target);
+		return result != NULL;
 	}
 
 }
 
-void RIVAL_Test()
+template<typename Tree>
+void test_addChild(Tree& tree, SizeType nodeCount, SizeType parentIndex, const Transform& value)
 {
-	Other_Tree_Test_Impl<RivalTree<Handle, HandleSorter> >();
+	typedef Tree::Node Node;
+	Node* parentNode = NULL;
+	{
+		ScopedProfiler prof(getStat(StatNthNode));
+		bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, parentIndex);
+		FLAT_ASSERT(success);
+	}
+	FLAT_ASSERT(parentIndex == 0 || isChildOf(parentNode, tree.root));
+
+	Node* node = NULL;
+	{
+		ScopedProfiler prof(getStat(StatAdd));
+		node = tree.createNode(value, parentNode);
+	}
+	FLAT_ASSERT(isChildOf(node, tree.root));
 }
 
-void NAIVE_Test()
+template<typename Tree>
+void test_moveChildren(Tree& tree, SizeType nodeCount, SizeType childIndex, SizeType newParentIndex)
 {
-	Other_Tree_Test_Impl<NaiveTree<Handle, HandleSorter> >();
+	FLAT_ASSERT(newParentIndex < childIndex);
+
+	typedef Tree::Node Node;
+
+	Node* node = NULL;
+	Node* parentNode = NULL;
+	{
+		ScopedProfiler prof(getStat(StatNthNode));
+		bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, childIndex);
+		FLAT_ASSERT(success);
+	}
+	{
+		ScopedProfiler prof(getStat(StatNthNode));
+		bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parentNode, newParentIndex);
+		FLAT_ASSERT(success);
+	}
+
+	FLAT_ASSERT(childIndex != 0 || isChildOf(parentNode, node));
+
+	if (isChildOf(parentNode, node))
+	{
+		Node* temp = node;
+		node = parentNode;
+		parentNode = temp;
+	}
+
+	FLAT_ASSERT(!isChildOf(parentNode, node));
+
+	{
+		FLAT_ASSERT(node != tree.root);
+		ScopedProfiler prof(getStat(StatMove));
+		tree.makeChildOf(node, parentNode);
+	}
+
+	FLAT_ASSERT(!isChildOf(parentNode, node));
 }
 
-uint32_t TranformTestResultHash = 0;
+template<typename Tree>
+void test_travelToLeaf(const Tree& tree, SizeType nodeCount)
+{
+	// travel to leaf
+
+	typedef Tree::Node Node;
+
+	ScopedProfiler prof(getStat(StatLeafTravel));
+	Node* currentNode = tree.root;
+
+	SizeType travelLoopCount = 0;
+
+	// Loop until in leaf
+	while (currentNode->children.getSize() > 0)
+	{
+		++travelLoopCount;
+		currentNode = (Node*)currentNode->children[Random::get(0, currentNode->children.getSize())];
+	}
+
+	*getStat(StatTravelDepth) += travelLoopCount;
+	maxStat(StatTravelMax, travelLoopCount);
+}
+
+template<typename Tree>
+void test_findDepthAndCount(const Tree& tree, SizeType nodeCount)
+{
+	struct LOLMBDA
+	{
+		static SizeType count(const RivalTreeNodeBase* node)
+		{
+			SizeType result = 1;
+			for (SizeType i = 0; i < node->children.getSize(); i++)
+			{
+				result += count(node->children[i]);
+			}
+			return result;
+		}
+		static SizeType depth(const RivalTreeNodeBase* node)
+		{
+			SizeType result = 0;
+			for (SizeType i = 0; i < node->children.getSize(); i++)
+			{
+				SizeType d = depth(node->children[i]);
+				if (d > result)
+					result = d;
+			}
+			return result + 1;
+		}
+	};
+
+	SizeType depth = 0;
+	SizeType count = 0;
+	{
+		ScopedProfiler prof(getStat(StatCalcDepth));
+		depth = LOLMBDA::depth((RivalTreeNodeBase*)tree.root);
+	}
+
+	{
+		ScopedProfiler prof(getStat(StatCalcCount));
+		count = LOLMBDA::count((RivalTreeNodeBase*)tree.root);
+	}
+	FLAT_ASSERT(count == nodeCount);
+
+	*getStat(StatCountAvg) += count;
+	*getStat(StatDepthAvg) += depth;
+
+	maxStat(StatCountMax, count);
+	maxStat(StatDepthMax, depth);
+}
+
+template<typename Tree>
+void test_multiplyTransforms(const Tree& tree, SizeType nodeCount, const SizeType TransformIterations)
+{
+	struct LOLMBDA
+	{
+		static void recurse(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& rt)
+		{
+			Transform myTransform = Transform::multiply(parentTransform, node->value);
+			rt.pushBack(myTransform);
+
+			for (SizeType i = 0; i < node->children.getSize(); i++)
+			{
+				recurse((Tree::Node*)node->children[i], myTransform, rt);
+			}
+		}
+	};
+
+
+	FLAT_VECTOR<Transform> resultTransforms;
+	resultTransforms.reserve(nodeCount);
+
+	{
+		// Only log first and last iterations
+
+		ScopedProfiler prof(getStat(StatTransformIt1));
+		LOLMBDA::recurse(tree.root, Transform(), resultTransforms);
+	}
+
+	for (SizeType iteration = 1; iteration + 1 < TransformIterations; ++iteration)
+	{
+		LOLMBDA::recurse(tree.root, Transform(), resultTransforms);
+	}
+
+	{
+		// Only log first and last iterations
+
+		ScopedProfiler prof(getStat(StatTransformIt10), true);
+		LOLMBDA::recurse(tree.root, Transform(), resultTransforms);
+	}
+}
+
+template<typename Tree>
+void test_removeNode(Tree& tree, SizeType& nodeCount, SizeType child)
+{
+	FLAT_ASSERT(nodeCount > 1);
+	typedef Tree::Node Node;
+	Node* node = NULL;
+
+	{
+		ScopedProfiler prof(getStat(StatNthNode));
+		bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)node, child);
+		FLAT_ASSERT(success);
+	}
+
+	FLAT_ASSERT(child == 0 || node != tree.root);
+
+	if (child == 0)
+	{
+		// Remove root
+		tree.root = NULL;
+	}
+
+	{
+		ScopedProfiler prof(getStat(StatErase));
+		tree.eraseNode(node);
+	}
+
+	if (child == 0)
+	{
+		// Remove root
+		nodeCount = 0;
+		return;
+	}
+
+	nodeCount = findCount(tree.root);
+}
+
 
 namespace
 {
 	static Transform getRandomTransform()
 	{
-		SizeType x = Random::get(0, 900);
-		SizeType y = Random::get(0, 900);
-		SizeType w = Random::get(100, 1000 - x);
-		SizeType h = Random::get(100, 1000 - y);
-
-		return Transform(x / 1000.0f, y / 1000.0f, w / 1000.0f, h / 1000.0f);
 	}
 };
-
-void FLAT_TransformTest()
-{
-	typedef FlatHierarchy<Transform, TransformSorter> HierarchyType;
-
-	struct FLUSHER
-	{
-		static void flush(HierarchyType& t)
-		{
-			flushCache(t.depths.buffer);
-			flushCache(t.values.buffer);
-			flushCache(&t);
-		}
-	};
-	#undef FLUSH_CACHE
-	#define FLUSH_CACHE FLUSHER::flush(l);
-
-	FLAT_VECTOR<Transform> resultTransforms;
-	resultTransforms.reserve(ArrTransformTestSizes[ArrTransformTestSizesCount - 1]);
-
-	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount; fullRoundNumber++)
-	{
-		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
-
-		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber];
-		const SizeType TransformIterations = 10;
-
-		CurrentTreeSize = fullRoundNumber;
-
-		printf("\nFlat tree transform multiplication test\n");
-		printf("Node count: %u\n", TransformTestSize);
-		//printf("Iterations: %u\n", TransformIterations);
-
-#ifndef _DEBUG
-		const SizeType TransformRoundNumber = ArrTransformRoundNumbers[fullRoundNumber];
-#else
-		const SizeType TransformRoundNumber = 2;
-#endif
-
-		for (SizeType rn = 0; rn < TransformRoundNumber; rn++)
-		{
-			const bool IsFirstRound = fullRoundNumber == 0 && rn == 0;
-
-			HierarchyType l(TransformTestSize);
-			l.createRootNode(Transform(0, 0, 1, 1));
-
-			// Create tranforms
-			for (SizeType aa = l.getCount(); aa < TransformTestSize; aa++)
-			{
-				SizeType parent = Random::get(0, aa);
-				Transform trns = getRandomTransform();
-
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatAdd));
-					l.createNodeAsChildOf(parent, trns);
-				}
-			}
-
-			// Check that transforms are correct
-			{
-				if (CheckHashes && IsFirstRound)
-					for (SizeType i = 0; i < l.getCount(); i++)
-						if (CurrentTransform < TransformBufferSize)
-							setTransform(l.values[i]);
-			}
-
-			// Get results
-			{
-				Transform tempBuffer[256];
-				FLAT_ASSERT(l.findMaxDepth() + 1 < 256);
-
-				for (SizeType iteration = 0; iteration < TransformIterations; iteration++)
-				{
-					resultTransforms.clear();
-
-					if (CheckHashes && iteration == 0 && IsFirstRound)
-					{
-						FLUSH_CACHE
-						ScopedProfiler prof(getStat(StatTransformIt1));
-
-						resultTransforms.pushBack(l.values[0]);
-						tempBuffer[0] = l.values[0];
-
-						if (CurrentTransform < TransformBufferSize)
-							setTransform(resultTransforms.getBack());
-						if (CurrentHash < HashBufferSize)
-							setHash(SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
-
-						for (SizeType i = 1, end = l.getCount(); i < end; i++)
-						{
-							FLAT_ASSERT(l.depths[i] > 0);
-							Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
-							resultTransforms.pushBack(myTransform);
-							tempBuffer[l.depths[i]] = myTransform;
-
-							if (CurrentTransform < TransformBufferSize)
-								setTransform(resultTransforms.getBack());
-							if (CurrentHash < HashBufferSize)
-								setHash(SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
-						}
-					}
-					else if (iteration == 0 || iteration + 1 < TransformIterations)
-					{
-						// Only log first and last iterations
-
-						if (iteration == 0)
-						{
-							FLUSH_CACHE
-						}
-						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10));
-
-						resultTransforms.pushBack(l.values[0]);
-						tempBuffer[0] = l.values[0];
-
-						for (SizeType i = 1, end = l.getCount(); i < end; i++)
-						{
-							FLAT_ASSERT(l.depths[i] > 0);
-							Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
-							resultTransforms.pushBack(myTransform);
-							tempBuffer[l.depths[i]] = myTransform;
-						}
-					}
-					else
-					{
-						resultTransforms.pushBack(l.values[0]);
-						tempBuffer[0] = l.values[0];
-
-						for (SizeType i = 1, end = l.getCount(); i < end; i++)
-						{
-							FLAT_ASSERT(l.depths[i] > 0);
-							Transform myTransform = Transform::multiply(tempBuffer[l.depths[i] - 1], l.values[i]);
-							resultTransforms.pushBack(myTransform);
-							tempBuffer[l.depths[i]] = myTransform;
-						}
-					}
-				}
-			}
-
-			if (IsFirstRound)
-			{
-				if (TranformTestResultHash == 0)
-					TranformTestResultHash = SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform));
-				else
-					FLAT_ASSERT(TranformTestResultHash == SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
-				FLAT_ASSERT(TranformTestResultHash != 0);
-			}
-
-			// Find count and depth, max and average
-			{
-				SizeType depth = l.findMaxDepth();
-				SizeType count = l.getCount();
-
-				*getStat(StatCountAvg) += count;
-				*getStat(StatDepthAvg) += depth;
-
-				maxStat(StatCountMax, count);
-				maxStat(StatDepthMax, depth);
-			}
-		}
-
-		printf("Average Add                %.4lf\n", avgStat(StatAdd));
-		printf("Average Transform once     %.4lf\n", avgStat(StatTransformIt1));
-		printf("Average Transform 10 times %.4lf\n", avgStat(StatTransformIt1));
-		printf("\n");
-		printf("Average Depth              %.1lf\n", avgStat(StatDepthAvg));
-		printf("Average Count              %.1lf\n", avgStat(StatCountAvg));
-		printf("\n\n");
-
-	}
-}
-
-
-template<typename Tree>
-void Other_Tree_TransformTest_Impl()
-{
-	struct FLUSHER
-	{
-		static void flush(Tree& t)
-		{
-			flushCache(t.root);
-			flushCache(&t);
-		}
-	};
-
-	#undef FLUSH_CACHE
-	#define FLUSH_CACHE FLUSHER::flush(tree);
-
-
-	FLAT_VECTOR<Transform> resultTransforms;
-	resultTransforms.reserve(ArrTransformTestSizes[ArrTransformTestSizesCount - 1]);
-
-	for (SizeType fullRoundNumber = 0; fullRoundNumber < ArrTransformTestSizesCount; fullRoundNumber++)
-	{
-		Random::init(ArrRandomSeeds[fullRoundNumber%ArrRandomSeedsCount]);
-
-		const SizeType TransformTestSize = ArrTransformTestSizes[fullRoundNumber];
-		const SizeType TransformIterations = 10;
-
-		if (sizeof(Tree) == sizeof(NaiveTree<Transform, TransformSorter>) && TransformTestSize > 10000000)
-			break;
-
-		CurrentTreeSize = fullRoundNumber;
-
-		printf("\n%s tree transform multiplication test\n", sizeof(Tree) == sizeof(NaiveTree<Transform, TransformSorter>) ? "Naive" : "Pooled");
-		printf("Node count: %u\n", TransformTestSize);
-		//printf("Iterations: %u\n", TransformIterations);
-
-#ifndef _DEBUG
-		const SizeType TransformRoundNumber = ArrTransformRoundNumbers[fullRoundNumber];
-#else
-		const SizeType TransformRoundNumber = 2;
-#endif
-
-		for (SizeType rn = 0; rn < TransformRoundNumber; rn++)
-		{
-			const bool IsFirstRound = fullRoundNumber == 0 && rn == 0;
-
-			struct Lolmbda
-			{
-				static void recurseCheck(const Tree::Node* node)
-				{
-					if (CheckHashes && CurrentTransform < TransformBufferSize)
-						setTransform(node->value);
-
-					for (SizeType i = 0; i < node->children.getSize(); i++)
-					{
-						recurseCheck((const Tree::Node*)node->children[i]);
-					}
-				}
-				static void recurse(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& rt)
-				{
-					Transform myTransform = Transform::multiply(parentTransform, node->value);
-					rt.pushBack(myTransform);
-
-					for (SizeType i = 0; i < node->children.getSize(); i++)
-					{
-						recurse((Tree::Node*)node->children[i], myTransform, rt);
-					}
-				}
-				static void recurseChecked(Tree::Node* node, const Transform& parentTransform, FLAT_VECTOR<Transform>& rt)
-				{
-					Transform myTransform = Transform::multiply(parentTransform, node->value);
-					rt.pushBack(myTransform);
-
-					if (CheckHashes && CurrentTransform < TransformBufferSize)
-						setTransform(myTransform);
-					if (CheckHashes && CurrentHash < HashBufferSize)
-						setHash(SuperFastHash((char*)rt.getPointer(), rt.getSize() * sizeof(Transform)));
-
-					for (SizeType i = 0; i < node->children.getSize(); i++)
-					{
-						recurseChecked((Tree::Node*)node->children[i], myTransform, rt);
-					}
-				}
-			};
-
-			Tree tree;
-			tree.root = tree.createNode(Transform(0, 0, 1, 1), NULL);
-
-			// Create transforms
-			for (SizeType aa = findCount(tree.root); aa < TransformTestSize; aa++)
-			{
-				SizeType parentNumber = Random::get(0, aa);
-				Transform trns = getRandomTransform();
-
-				Tree::Node* parent = NULL;
-				{
-					bool success = tryGetNthNode(tree.root, (RivalTreeNodeBase*&)parent, parentNumber);
-					FLAT_ASSERT(success);
-				}
-
-				{
-					FLUSH_CACHE
-					ScopedProfiler prof(getStat(StatAdd));
-					tree.createNode(trns, parent);
-				}
-
-			}
-
-			// Check that transforms are correct
-			{
-				if (CheckHashes && IsFirstRound)
-					Lolmbda::recurseCheck(tree.root);
-			}
-
-			// Get results
-			{
-				for (SizeType iteration = 0; iteration < TransformIterations; iteration++)
-				{
-					resultTransforms.clear();
-
-					if (CheckHashes && iteration == 0 && IsFirstRound)
-					{
-						FLUSH_CACHE
-						ScopedProfiler prof(getStat(StatTransformIt1));
-						Lolmbda::recurseChecked(tree.root, Transform(), resultTransforms);
-					}
-					else if (iteration == 0 || iteration + 1 < TransformIterations)
-					{
-						// Only log first and last iterations
-
-						FLUSH_CACHE
-						ScopedProfiler prof(getStat(iteration == 0 ? StatTransformIt1 : StatTransformIt10), iteration != 0);
-						Lolmbda::recurse(tree.root, Transform(), resultTransforms);
-					}
-					else
-					{
-						Lolmbda::recurse(tree.root, Transform(), resultTransforms);
-					}
-				}
-			}
-
-			if (IsFirstRound)
-			{
-				if (TranformTestResultHash == 0)
-				{
-					TranformTestResultHash = SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform));
-				}
-				else
-				{
-					FLAT_ASSERT(TranformTestResultHash == SuperFastHash((char*)resultTransforms.getPointer(), resultTransforms.getSize() * sizeof(Transform)));
-				}
-				FLAT_ASSERT(TranformTestResultHash != 0);
-			}
-
-			// Count and depth, max and average
-			{
-				SizeType depth = findDepth(tree.root);
-				SizeType count = findCount(tree.root);
-
-				*getStat(StatCountAvg) += count;
-				*getStat(StatDepthAvg) += depth;
-
-				maxStat(StatCountMax, count);
-				maxStat(StatDepthMax, depth);
-			}
-		}
-
-		printf("Average Add                %.4lf\n", avgStat(StatAdd));
-		printf("Average Transform once     %.4lf\n", avgStat(StatTransformIt1));
-		printf("Average Transform 10 times %.4lf\n", avgStat(StatTransformIt1));
-		printf("\n");
-		printf("Average Depth              %.1lf\n", avgStat(StatDepthAvg));
-		printf("Average Count              %.1lf\n", avgStat(StatCountAvg));
-		printf("\n\n");
-	}
-}
-
-void RIVAL_TransformTest()
-{
-	Other_Tree_TransformTest_Impl<RivalTree<Transform, TransformSorter> >();
-}
-void NAIVE_TransformTest()
-{
-	Other_Tree_TransformTest_Impl<NaiveTree<Transform, TransformSorter> >();
-}
-
 
 
 
@@ -1696,14 +1212,9 @@ void test()
 	ScopedProfiler wholeTestProfiler;
 
 	{
-		printf("Making random seeds...\n");
-		
 		Random::init(1771551);
-		for (SizeType i = 0; i < ArrRandomSeedsCount; i++)
-		{
-			ArrRandomSeeds[i] = Random::Extract();
-		}
-		printf("Done!\n");
+		Random::defaultSeed = Random::Extract();
+		Random::init();
 	}
 
 	memset(LogBuffer, ' ', sizeof(LogBuffer));
@@ -1717,11 +1228,7 @@ void test()
 			CurrentTreeType = 0;
 
 			printf("\nFlat Tree\n");
-
-			FLAT_Test();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
+			testTree< FlatHierarchy<Transform, TransformSorter> >();
 		}
 
 		// Hot cache
@@ -1730,10 +1237,7 @@ void test()
 			Rundi = 1;
 			CurrentTreeType = 1;
 
-			FLAT_Test();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
+			testTree< FlatHierarchy<Transform, TransformSorter> >();
 		}
 
 		// Cold cache
@@ -1744,10 +1248,7 @@ void test()
 
 			printf("\nFlat Tree With Cold Cache\n");
 
-			FLAT_Test();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
+			testTree< FlatHierarchy<Transform, TransformSorter> >();
 		}
 
 		// Naive tree
@@ -1757,10 +1258,7 @@ void test()
 
 			printf("\nNaive Tree\n");
 
-			NAIVE_Test();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
+			testTree< NaiveTree<Transform, TransformSorter> >();
 		}
 
 		// Rival tree
@@ -1770,73 +1268,15 @@ void test()
 
 			printf("\nBuffered Tree\n");
 
-			RIVAL_Test();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
+			testTree< RivalTree<Transform, TransformSorter> >();
 		}
 
-
-
-		//
-		// Transform tests
-		//
-
-		CurrentlyTestingTransforms = true;
-
-		// Reset hashing for Transform test
-		CheckingHashes = false;
-
-		// Flat Transform
-		if ((TestMask & Flat1Transform) != 0 || (TestMask & Every) != 0)
-		{
-			printf("\nFlat Transform\n");
-
-			CurrentTreeType = 0;
-			Rundi = 0;
-
-			FLAT_TransformTest();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
-			CurrentTransform = 0;
-		}
-
-		// Rival Transform
-		if ((TestMask & RivalTransform) != 0 || (TestMask & Every) != 0)
-		{
-			printf("\nBuffered Tree Transform\n");
-
-			Rundi = 0;
-			CurrentTreeType = 1;
-
-			RIVAL_TransformTest();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
-			CurrentTransform = 0;
-		}
-		// Naive Transform
-		if ((TestMask & NaiveTransform) != 0 || (TestMask & Every) != 0)
-		{
-			printf("\nNaive Tree Transform\n");
-
-			Rundi = 0;
-			CurrentTreeType = 2;
-
-			NAIVE_TransformTest();
-			CheckingHashes = true;
-			CurrentHash = 0;
-			CurrentCounter = 0;
-			CurrentTransform = 0;
-		}
 	}
 	catch (...)
 	{
 	}
 	// Print summary about depth and count
 	{
-		CurrentlyTestingTransforms = false;
 		logTable("\tMax Count\t");
 		logTable("Average Count\t");
 		logTable("Max Depth\t");
@@ -1853,20 +1293,19 @@ void test()
 	}
 
 	// Log base stats
-	for (StatNumber stat = StatAdd; stat < StatBaseMax; stat = (StatNumber)((uint32_t)stat + 1))
+	for (StatNumber stat = StatAdd; stat < StatMax; stat = (StatNumber)((uint32_t)stat + 1))
 	{
 		// size 
 		{
 			logTable("\n\tCount\t");
-			for (SizeType treeSize = 0; treeSize < ArrBaseTestSizesCount; treeSize++)
+			for (SizeType treeSize = 0; treeSize < ArrTestSizesCount; treeSize++)
 			{
-				CurrentlyTestingTransforms = false;
-				logTableInt(ArrBaseTestSizes[treeSize]);
+				logTableInt(ArrTestSizes[treeSize]);
 			}
 			logTable("\n");
 		}
 
-		static const char* statNames[] = { "Add", "Erase", "Move", "Nth Node", "Leaf travel", "Find max depth", "Find count", "Traveled depth average", "Travel depth max" };
+		static const char* statNames[] = { "Add", "Erase", "Move", "Nth Node", "Leaf travel", "Find max depth", "Find count", "Traveled depth average", "Travel depth max", "Transform mult first", "Transform mult last" };
 
 		logTable(statNames[stat - StatAdd]);
 		logTable("\t");
@@ -1879,11 +1318,10 @@ void test()
 			logTable(treeName);
 			logTable("\t");
 
-			for (SizeType treeSize = 0; treeSize < ArrBaseTestSizesCount; treeSize++)
+			for (SizeType treeSize = 0; treeSize < ArrTestSizesCount; treeSize++)
 			{
 				CurrentTreeType = treeType;
 				CurrentTreeSize = treeSize;
-				CurrentlyTestingTransforms = false;
 
 				if(stat == StatTravelMax)
 					logTableInt((uint32_t)maxStat(stat));
@@ -1896,51 +1334,6 @@ void test()
 		}
 	}
 
-	// size 
-	{
-		logTable("\nTransforms");
-		logTable("\n\tCount\t");
-		for (SizeType treeSize = 0; treeSize < ArrTransformTestSizesCount; treeSize++)
-		{
-			CurrentlyTestingTransforms = true;
-			logTableInt(ArrTransformTestSizes[treeSize]);
-		}
-		logTable("\n");
-	}
-
-	// Log transforms
-	for (StatNumber stat = StatTransformIt1; stat < StatTransformMax; stat = (StatNumber)((uint32_t)stat + 1))
-	{
-		static const char* statNames[] = { "1st iteration", "10th iteration" };
-
-		logTable(statNames[stat - StatTransformIt1]);
-		logTable("\t");
-
-		for (SizeType treeType = 0; treeType < 3U; treeType++)
-		{
-			static const char* treeNames[] = { "Flat", "Pooled", "Naive" };
-
-			logTable(treeNames[treeType]);
-			if (stat == StatTransformIt10)
-				logTable(" 10");
-			logTable("\t");
-
-			for (SizeType treeSize = 0; treeSize < ArrTransformTestSizesCount; treeSize++)
-			{
-				CurrentTreeType = treeType;
-				CurrentTreeSize = treeSize;
-				CurrentlyTestingTransforms = true;
-
-				logTableDouble(avgStat(stat));
-			}
-
-			logTable("\n");
-			if (treeType + 1 < 3)
-				logTable("\t");
-		}
-	}
-
-
 	logTableEnd();
 
 	for (SizeType i = 0; i < sizeof(LogBuffer); i++)
@@ -1950,6 +1343,7 @@ void test()
 			LogBuffer[i] = ',';
 		}
 	}
+
 	printf("%s\n", LogBuffer);
 
 #ifdef MAX_PERF
@@ -1959,8 +1353,21 @@ void test()
 		FLAT_ASSERT(err >= 0);
 		fprintf(f, "%s", LogBuffer);
 		fclose(f);
+
+		printf("\nOutput saved to output.csv\n");
 	}
 #endif
+
+	// Print hashes
+	if(CheckHashes)
+	{
+		for (SizeType i = 0; i < 5; i++)
+		{
+			printf("%x  ", testResultHashes[i]);
+		}
+		printf("\n");
+		printf("\n");
+	}
 
 	printf("\nTest completed in %.2lf seconds.\n\n", wholeTestProfiler.stop() / 1000000.0);
 
