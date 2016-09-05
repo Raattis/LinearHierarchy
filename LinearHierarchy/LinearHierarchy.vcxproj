@@ -223,6 +223,7 @@
     <ClInclude Include="FlatAssert.h" />
     <ClInclude Include="FlatHierarchy.h" />
     <ClInclude Include="HierarchyCache.h" />
+    <ClInclude Include="MultiwayTree.h" />
     <ClInclude Include="Test.h" />
     <ClInclude Include="RivalTree.h" />
   </ItemGroup>

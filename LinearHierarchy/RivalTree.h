@@ -6,23 +6,7 @@
 typedef uint32_t SizeType;
 
 #ifndef FLAT_VECTOR
-#include <vector>
-template<typename ValueType>
-class FLAT_Vector_Type : public std::vector<ValueType alignas(16)>
-{
-public:
-	void pushBack(const ValueType& v) { push_back(v); }
-	size_t getSize() const { return size(); }
-	void insert(size_t index, const ValueType& v) { std::vector<ValueType>::insert(begin() + index, v); }
-	const ValueType& getBack() const { return back(); }
-	ValueType& getBack() { return back(); }
-	size_t getCapacity() const { return capacity(); }
-	void zero(size_t start, size_t end) { return std::fill(begin() + start, begin() + end, 0); }
-	ValueType* getPointer() { return &*begin(); }
-	void erase(size_t index) { erase(begin() + index); }
-};
-
-#define FLAT_VECTOR FLAT_Vector_Type
+	#error "FLAT_VECTOR not defined"
 #endif
 
 static SizeType recursionCounter = 0;
@@ -234,12 +218,12 @@ void connectToParent(RivalTreeNodeBase* node, RivalTreeNodeBase* parent)
 }
 
 template<typename Sorter, typename Node>
-void makeChildOfImpl(Node* node, Node* parent)
+void makeChildOfImpl(RivalTreeNodeBase* node, RivalTreeNodeBase* parent)
 {
 	FLAT_ASSERT(parent);
 	FLAT_ASSERT(!isChildOf(parent, node));
 
-	disconnectFromParentAndSiblings(node);
+	disconnectFromParentAndSiblings((RivalTreeNodeBase*)node);
 	connectToParent<Sorter, Node>(node, parent);
 }
 
@@ -263,6 +247,16 @@ static SizeType findDepth(const RivalTreeNodeBase* node)
 			maxDepth = d;
 	}
 	return maxDepth;
+}
+
+static SizeType getChildCount(const RivalTreeNodeBase* node)
+{
+	return node->children.getSize();
+}
+
+static RivalTreeNodeBase* getNthChild(RivalTreeNodeBase* node, SizeType n)
+{
+	return node->children[n];
 }
 
 //Node* find(const ValueType& value)
@@ -309,6 +303,12 @@ struct RivalTree
 		{
 			delete treeNodeBuffers[i];
 		}
+	}
+	void removeRoot()
+	{
+		Node* temp = root;
+		root = NULL; // By pass assert
+		eraseNode(temp);
 	}
 
 	Node* createNode(const ValueType& value, Node* parent)
@@ -360,9 +360,9 @@ struct RivalTree
 		FLAT_ASSERT(recursionCounter == 0);
 	}
 
-	void makeChildOf(Node* node, Node* parent)
+	void makeChildOf(RivalTreeNodeBase* node, RivalTreeNodeBase* parent)
 	{
-		makeChildOfImpl<Sorter>(node, parent);
+		makeChildOfImpl<Sorter, Node>(node, parent);
 	}
 };
 
@@ -381,6 +381,11 @@ struct NaiveTree
 	{
 		if (root)
 			eraseNode(root);
+		root = NULL;
+	}
+	void removeRoot()
+	{
+		eraseNode(root);
 		root = NULL;
 	}
 
@@ -411,9 +416,9 @@ struct NaiveTree
 		Lolmbda::recurse(node);
 	}
 
-	void makeChildOf(Node* node, Node* parent)
+	void makeChildOf(RivalTreeNodeBase* node, RivalTreeNodeBase* parent)
 	{
-		makeChildOfImpl<Sorter>(node, parent);
+		makeChildOfImpl<Sorter, Node>(node, parent);
 	}
 };
 
