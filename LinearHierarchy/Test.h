@@ -45,7 +45,7 @@ const bool CheckHashes = false;
 const bool CheckCounts = false;
 #else
 const bool DoCacheFlushing = false;
-const bool VerbosePrinting = true;
+const bool VerbosePrinting = false;
 const bool CheckHashes = true;
 const bool CheckCounts = true;
 #endif
@@ -73,27 +73,15 @@ const uint32_t TestMask
 	Naive |
 	Nulti |
 	Multi |
-	//Every |
+	Every |
 #ifdef MAX_PERF
 	Every |
 #endif
 	0;
 
-#if false
-#define FLAT_NO_CACHE_CONDITION     (Random::random % 15 < 5)
-#define FLAT_CACHE_CONDITION        (Random::random % 15 >= 5 && Random::random % 15 < 10)
-#define FLAT_CACHE_UNPREP_CONDITION (Random::random % 15 >= 10)
-#elif false
-#define FLAT_NO_CACHE_CONDITION     (true)
-#define FLAT_CACHE_CONDITION        (false)
-#define FLAT_CACHE_UNPREP_CONDITION (false)
-#else
-#define FLAT_NO_CACHE_CONDITION     (Rundi == 0)
-#define FLAT_CACHE_CONDITION        (Rundi == 1)
-#define FLAT_CACHE_UNPREP_CONDITION (Rundi == 2)
-#endif
-
-SizeType Rundi = 0;
+#define FLAT_NO_CACHE_CONDITION     (CurrentTreeType == 0)
+#define FLAT_CACHE_CONDITION        (CurrentTreeType == 1)
+#define FLAT_CACHE_UNPREP_CONDITION (CurrentTreeType == 2)
 
 struct Vector2
 {
@@ -225,7 +213,7 @@ struct Transform
 
 struct TransformSorter
 {
-	static const bool UseSorting = false;
+	static const bool UseSorting = true;
 	inline static bool isFirst(const Transform& a, const Transform& b) { return a.pos.x < b.pos.x; }
 };
 
@@ -535,7 +523,7 @@ void testTree()
 		const SizeType TestNodeCount = ArrTestSizes[arrSizeIndex];
 
 #ifdef _DEBUG
-		const SizeType TestRepeatCount = DebugBaseTestRoundNumber < ArrTestRoundNumbers[arrSizeIndex] ? DebugBaseTestRoundNumber : 2;
+		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
 #else
 		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
 #endif
@@ -1244,7 +1232,7 @@ void test_multiplyTransforms(const Tree& tree, SizeType nodeCount, const SizeTyp
 template<typename Tree>
 void test_removeNode(Tree& tree, SizeType& nodeCount, SizeType child)
 {
-	FLAT_ASSERT(nodeCount > 1);
+	FLAT_ASSERT(nodeCount > 1 || child == 0);
 	typedef Tree::Node Node;
 	Node* node = NULL;
 
@@ -1389,7 +1377,6 @@ void test()
 		// Flat
 		if ((TestMask & Flat1) != 0 || (TestMask & Every) != 0)
 		{
-			Rundi = 0;
 			CurrentTreeType = 0;
 
 			printf("\nFlat Tree\n");
@@ -1399,7 +1386,6 @@ void test()
 		// Hot cache
 		if ((TestMask & Flat2) != 0 || (TestMask & Every) != 0)
 		{
-			Rundi = 1;
 			CurrentTreeType = 1;
 
 			testTree< FlatHierarchy<Transform, TransformSorter> >();
@@ -1408,7 +1394,6 @@ void test()
 		// Cold cache
 		if ((TestMask & Flat3) != 0 || (TestMask & Every) != 0)
 		{
-			Rundi = 2;
 			CurrentTreeType = 2;
 
 			printf("\nFlat Tree With Cold Cache\n");

@@ -128,7 +128,14 @@ def make_chart(surface, name, headers, series_names, series, maxValue):
             #surface.blit(text, (x - text.get_width() * 0.5, y - text.get_height()))
             
         pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
-
+        move_points(points, 1,0)
+        pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
+        move_points(points, 0,1)
+        pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
+        move_points(points, 0,-1)
+        pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
+        move_points(points, -1,0)
+        
         symbol = symbols[series_names[j]]
         for p in points:
             surface.blit(symbol, (p[0] - symbol.get_width() * 0.5, p[1] - symbol.get_height() * 0.5))
@@ -160,6 +167,10 @@ def make_chart(surface, name, headers, series_names, series, maxValue):
     pygame.image.save(surface, "{2}_-_{0}_-_{1}.png".format(image_counter, name, name_prefix))
     
     #pause()
+
+def move_points(points, x, y):
+    for i in range(len(points)):
+        points[i] = (points[i][0] + x, points[i][1] + y)
 
 def parse_numbers(headers, series):
     for row in range(0, len(series)):
@@ -199,41 +210,39 @@ def remove(del_name, names, series):
 def main():
     global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols, name_prefix
 
-    resolution = (800,600)
-    left_margin = 75
-    top_margin = 80
-    right_margin = 150
-    bottom_margin = 80
+    resolution = (1440,1080)
+    left_margin = 100
+    top_margin = 100
+    right_margin = 280
+    bottom_margin = 100
     chart_margins = Rect(left_margin, top_margin, resolution[0] - left_margin - right_margin, resolution[1] - top_margin - bottom_margin )
 
     pygame.init()
     screen = pygame.display.set_mode(resolution)
     pygame.display.flip()
     
-    legend_font = pygame.font.SysFont("arial", 20)
-    label_font = pygame.font.SysFont("arial", 14)
-    title_font = pygame.font.SysFont("arial", 22)
-    subtitle_font = pygame.font.SysFont("arial", 16)
+    legend_font = pygame.font.SysFont("arial", 30)
+    label_font = pygame.font.SysFont("arial", 18)
+    title_font = pygame.font.SysFont("arial", 26)
+    subtitle_font = pygame.font.SysFont("arial", 18)
 
     colors = {}
     colors["Flat"] = (10,60,10)
     colors["Flat cached"] = (80,200,20)
     colors["Flat cold"] = (20,100,220)
-    colors["Pooled"] = (180,20,10)
-    colors["Naive"] = (130,10,150)
-    colors["Flat 10"] = colors["Flat cached"]
-    colors["Pooled 10"] = (250,120,120)
-    colors["Naive 10"] = (250,20,250)
+    colors["Pooled Pointer"] = (180,20,10)
+    colors["Naive Pointer"] = (250,120,120)
+    colors["Pooled Multiway"] = (130,10,150)
+    colors["Naive Multiway"] = (250,20,250)
     
     symbols = {}
     symbols["Flat"] = legend_font.render("o", True, colors["Flat"])
     symbols["Flat cached"] = legend_font.render("o", True, colors["Flat cached"])
     symbols["Flat cold"] = legend_font.render("o", True, colors["Flat cold"])
-    symbols["Pooled"] = legend_font.render("o", True, colors["Pooled"])
-    symbols["Naive"] = legend_font.render("o", True, colors["Naive"])
-    symbols["Flat 10"] = legend_font.render("o", True, colors["Flat 10"])
-    symbols["Pooled 10"] = legend_font.render("o", True, colors["Pooled 10"])
-    symbols["Naive 10"] = legend_font.render("o", True, colors["Naive 10"])
+    symbols["Pooled Pointer"] = legend_font.render("o", True, colors["Pooled Pointer"])
+    symbols["Naive Pointer"] = legend_font.render("o", True, colors["Naive Pointer"])
+    symbols["Pooled Multiway"] = legend_font.render("o", True, colors["Pooled Multiway"])
+    symbols["Naive Multiway"] = legend_font.render("o", True, colors["Naive Multiway"])
 
     lines = None
 
@@ -254,9 +263,10 @@ def main():
         if(len(line) == 1):
             continue
         table.append(line.rstrip().split('\t'))
+        print(len(table), table[-1])
 
-    for test_number in range(0, 7):
-        i = test_number * 6 + 2
+    for test_number in range(0, 11):
+        i = test_number * 8 + 2
         chart_name = table[i + 1][0]
         
         
@@ -266,6 +276,8 @@ def main():
         data_series_names.append(table[i + 3][1])
         data_series_names.append(table[i + 4][1])
         data_series_names.append(table[i + 5][1])
+        data_series_names.append(table[i + 6][1])
+        data_series_names.append(table[i + 7][1])
         
         
         data_series = []
@@ -274,11 +286,13 @@ def main():
         data_series.append(table[i + 3][2:])
         data_series.append(table[i + 4][2:])
         data_series.append(table[i + 5][2:])
+        data_series.append(table[i + 6][2:])
+        data_series.append(table[i + 7][2:])
 
         data_series_headers = table[i + 0][2:]
 
 
-
+        print(data_series_headers)
         parse_numbers(data_series_headers, data_series)
 
 
@@ -313,8 +327,10 @@ def main():
             data_series, data_series_names = remove("Flat cold", data_series_names, data_series)
             make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, find_max_value(data_series))
             
-            temp_series, temp_series_names = remove("Pooled", data_series_names, data_series)
-            temp_series, temp_series_names = remove("Naive", temp_series_names, temp_series)
+            temp_series, temp_series_names = remove("Pooled Pointer", data_series_names, data_series)
+            temp_series, temp_series_names = remove("Naive Pointer", temp_series_names, temp_series)
+            temp_series, temp_series_names = remove("Pooled Multiway", temp_series_names, temp_series)
+            temp_series, temp_series_names = remove("Naive Multiway", temp_series_names, temp_series)
             make_chart(screen, chart_name + ", flat only", data_series_headers, data_series_names, data_series, find_max_value(temp_series))
             
             make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, normalize(data_series_headers, data_series), find_max_value(normalize(data_series_headers, data_series)))
@@ -340,40 +356,6 @@ def main():
             make_chart(screen, chart_name + " normalized", data_series_headers, temp_series_names, normalize(data_series_headers, temp_series), find_max_value(normalize(data_series_headers, temp_series)))
         else:
             make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, find_max_value(data_series))
-            
-        
-    # Transform test
-    if True:
-        i = 57
-        chart_name = "Transform"
-
-        data_series_names = []
-        data_series_names.append(table[i + 1][1])
-        data_series_names.append(table[i + 2][1])
-        data_series_names.append(table[i + 3][1])
-        data_series_names.append(table[i + 4][1])
-        data_series_names.append(table[i + 5][1])
-        data_series_names.append(table[i + 6][1])
-        
-        data_series = []
-        data_series.append(table[i + 1][2:])
-        data_series.append(table[i + 2][2:])
-        data_series.append(table[i + 3][2:])
-        data_series.append(table[i + 4][2:])
-        data_series.append(table[i + 5][2:])
-        data_series.append(table[i + 6][2:])
-
-        data_series_headers = table[i + 0][2:]
-
-        parse_numbers(data_series_headers, data_series)
-        data_max_value = find_max_value(data_series)
-        make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, data_max_value)
-        
-        temp_series = normalize(data_series_headers, data_series)
-        temp_chart_name = chart_name + " normalized"
-        data_max_value = find_max_value(temp_series)
-        make_chart(screen, temp_chart_name, data_series_headers, data_series_names, temp_series, data_max_value)
-        
 
 
 try:
