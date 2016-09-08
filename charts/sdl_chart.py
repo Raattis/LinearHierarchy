@@ -354,6 +354,14 @@ def main():
             make_chart(screen, chart_name + "", data_series_headers, temp_series_names, temp_series, find_max_value(temp_series))
 
             make_chart(screen, chart_name + " normalized", data_series_headers, temp_series_names, normalize(data_series_headers, temp_series), find_max_value(normalize(data_series_headers, temp_series)))
+            
+        elif "Transform" in chart_name:
+            temp_series, temp_series_names = remove("Flat cached", data_series_names, data_series)
+            temp_series, temp_series_names = remove("Flat cold", temp_series_names, temp_series)
+            make_chart(screen, chart_name + "", data_series_headers, temp_series_names, temp_series, find_max_value(temp_series))
+
+            make_chart(screen, chart_name + " normalized", data_series_headers, temp_series_names, normalize(data_series_headers, temp_series), find_max_value(normalize(data_series_headers, temp_series)))
+            
         else:
             make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, find_max_value(data_series))
 
