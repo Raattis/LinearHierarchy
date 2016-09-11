@@ -5,7 +5,7 @@ The tree types are
 * Child array tree
 * Flat array tree
 
-The test executes following operations on all of the trees
+The test executes following operations on all of the trees.
 * add node
 * move subtree to a different parent node
 * traverse from root to a random leaf
@@ -13,11 +13,11 @@ The test executes following operations on all of the trees
 * read every node of the tree in depth search order
 * delete subtree
 
-Additionally following operations are executed only on the pointer based trees as they are just simple look-up operations on the flat tree.
+Additionally following operations are executed only on the pointer based trees. Flat array is excluded these are just simple look-up operations on it.
 * count nodes
 * travel to the tree's Nth node in depth search order
 
-The purpose of this program is to precisely measure the execution times of the afore mentioned operations on all of the trees with varying node counts.
+The test are run using multiple different tree sizes. The sizes span from 10 nodes to 25,000 nodes. Additionally the test are repeated multiple times to mitigate random variance between executions.
 
 The CPU cache gets flushed before every measurement to ensure a clean execution state. This cache flushing is achieved by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The majority of the programs execution time spent doing this.
 
@@ -105,7 +105,7 @@ The tree is formed by ordering the values in depth search order. Every node is a
           node_1_2_1
 
 ```
-turns into two blocks of 
+turns into two arrays 
 ```
 values:    root, node_1, node_1_1, node_1_2, node_1_2_1, node_2, node_2_1, node_3
 depths:    0,    1,      2,        2,        3,          1,      2,        1
