@@ -21,9 +21,9 @@
 typedef uint32_t SizeType;
 
 #ifdef _DEBUG
-const SizeType ArrTestSizesCount = 2;
-const SizeType ArrTestRoundNumbers[] = { 50, 25 };
-const SizeType ArrTestSizes[]        = { 10, 25 };
+const SizeType ArrTestSizesCount = 3;
+const SizeType ArrTestRoundNumbers[] = { 50, 25, 10 };
+const SizeType ArrTestSizes[]        = { 10, 25, 50 };
 
 #elif true //&& false
 const SizeType ArrTestSizesCount = 11;
@@ -42,12 +42,10 @@ const SizeType ArrTestSizes[]        = { 10, 25, 50, 100, 250, 500, 1000, 2500, 
 const bool DoCacheFlushing = true;
 const bool VerbosePrinting = false;
 const bool CheckHashes = false;
-const bool CheckCounts = false;
 #else
 const bool DoCacheFlushing = false;
 const bool VerbosePrinting = false;
 const bool CheckHashes = true;
-const bool CheckCounts = true;
 #endif
 
 const SizeType TreeCount = 7;
@@ -66,13 +64,13 @@ enum
 
 const uint32_t TestMask
 	=
-	Flat1 |
+	//Flat1 |
 	//Flat2 |
 	//Flat3 |
-	Rival |
+	//Rival |
 	Naive |
 	Nulti |
-	Multi |
+	//Multi |
 	Every |
 #ifdef MAX_PERF
 	Every |
@@ -538,31 +536,55 @@ void testTree()
 
 			printf("\rCurrentHash: %08x, progress: %d / %d   ", runningHash, repeatNumber + 1, TestRepeatCount);
 
-			for (SizeType i = nodeCount; i < TestNodeCount; i++)
 			{
-				SizeType x = Random::get(0, 900);
-				SizeType y = Random::get(0, 900);
-				SizeType w = Random::get(100, 1000 - x);
-				SizeType h = Random::get(100, 1000 - y);
-
-				Transform value(x / 1000.0f, y / 1000.0f, w / 1000.0f, h / 1000.0f);
-#ifndef MAX_PERF
-				value.name[0] = (char)Random::get('A', 'Z'); value.name[1] = (char)Random::get('a', 'z');
-				value.name[2] = (char)Random::get('a', 'z'); value.name[3] = (char)Random::get('a', 'z');
-#endif
-
-				SizeType parentIndex = Random::get(0, nodeCount);
-				test_addChild(t, nodeCount, parentIndex, value);
-				++nodeCount;
-
-				if (VerbosePrinting)
+				struct LOLMBDA
 				{
-					test_print(t);
-				}
+					static void add(Tree& t, SizeType parentIndex, SizeType childCount, SizeType& nodeCount, const SizeType targetNodeCount)
+					{
+						FLAT_ASSERT(nodeCount < targetNodeCount);
+						SizeType index = test_addChild(t, nodeCount, parentIndex);
+						nodeCount += 1;
 
-				if (CheckHashes)
+						if (VerbosePrinting)
+						{
+							test_print(t);
+						}
+
+						if (CheckHashes)
+						{
+							test_setHash(t);
+						}
+
+						for (SizeType i = 0; i < childCount; ++i)
+						{
+							if (nodeCount >= targetNodeCount)
+								return;
+							add(t, index, childCount - 1 - i, nodeCount, targetNodeCount);
+						}
+					}
+				};
+
+				SizeType childCount = 2;
+				while (nodeCount < TestNodeCount)
 				{
-					test_setHash(t);
+					SizeType nodeIndex = test_addChild(t, nodeCount, 0);
+					nodeCount += 1;
+
+					if (VerbosePrinting)
+					{
+						test_print(t);
+					}
+
+					if (CheckHashes)
+					{
+						test_setHash(t);
+					}
+
+					if(nodeCount < TestNodeCount)
+					{
+						LOLMBDA::add(t, nodeIndex, childCount, nodeCount, TestNodeCount);
+						childCount += 1;
+					}
 				}
 			}
 
@@ -666,21 +688,46 @@ void test_setHash(const FlatHierarchy<Transform, TransformSorter>& tree)
 	}
 }
 
-void test_addChild(FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType parentIndex, const Transform& value)
+static Transform makeTransform()
+{
+	SizeType x = Random::get(0, 900);
+	SizeType y = Random::get(0, 900);
+	SizeType w = Random::get(100, 1000 - x);
+	SizeType h = Random::get(100, 1000 - y);
+
+	Transform value(x / 1000.0f, y / 1000.0f, w / 1000.0f, h / 1000.0f);
+#ifndef MAX_PERF
+	value.name[0] = (char)Random::get('A', 'Z'); value.name[1] = (char)Random::get('a', 'z');
+	value.name[2] = (char)Random::get('a', 'z'); value.name[3] = (char)Random::get('a', 'z');
+#endif
+	return value;
+}
+
+SizeType test_addChild(FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType parentIndex)
 {
 	LastDescendantCache descendantCache;
 	descendantCache.cacheIsValid = false;
 	if (FLAT_CACHE_CONDITION)
 		descendantCache.makeCacheValid(tree);
 
+	SizeType childIndex = ~0U;
+
+	Transform value = makeTransform();
 	shuffleMemory();
-	ScopedProfiler p(getStat(StatAdd));
+
 	if (FLAT_NO_CACHE_CONDITION)
-		tree.createNodeAsChildOf(parentIndex, value);
+	{
+		ScopedProfiler p(getStat(StatAdd));
+		childIndex = tree.createNodeAsChildOf(parentIndex, value);
+	}
 	else if (FLAT_CACHE_CONDITION || FLAT_CACHE_UNPREP_CONDITION)
-		createNodeAsChildOf(tree, descendantCache, parentIndex, value);
+	{
+		ScopedProfiler p(getStat(StatAdd));
+		childIndex = createNodeAsChildOf(tree, descendantCache, parentIndex, value);
+	}
 	else
 		FLAT_ASSERT(!"No condition matched.");
+	return childIndex;
 }
 
 void test_moveChildren(FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType childIndex, SizeType newParentIndex)
@@ -919,12 +966,12 @@ void test_print(const FlatHierarchy<Transform, TransformSorter>& tree)
 				memcpy(buffer + c * 5, (hasDirectChildren ? "-v---" : "-v   "), 5);
 			else if (tree.depths[c] > r && hasDirectChildren)
 				memcpy(buffer + c * 5, "-----", 5);
-			else if (tree.depths[c] < r + 1 && tree.depths[c] + 4U >= r)
-			{
-				char tempBuffer[128];
-				sprintf(tempBuffer, "%0.5f", *((&((tree.values.getPointer() + c)->pos.x)) + (r - 1 - tree.depths[c])));
-				memcpy(buffer + c * 5, tempBuffer+2, 5);
-			}
+			//else if (tree.depths[c] < r + 1 && tree.depths[c] + 4U >= r)
+			//{
+			//	char tempBuffer[128];
+			//	sprintf(tempBuffer, "%0.5f", *((&((tree.values.getPointer() + c)->pos.x)) + (r - 1 - tree.depths[c])));
+			//	memcpy(buffer + c * 5, tempBuffer+2, 5);
+			//}
 			else
 				memcpy(buffer + c * 5, "     ", 5);
 		}
@@ -1029,9 +1076,9 @@ namespace
 				}
 				--current;
 
-				for (SizeType i = 0; i < n->children.getSize(); i++)
+				for (SizeType i = 0, end = getChildCount(n); i < end; i++)
 				{
-					if (RivalTreeNodeBase* result = recurse(n->children[i], current))
+					if (RivalTreeNodeBase* result = recurse(getNthChild(n, i), current))
 						return result;
 				}
 				return NULL;
@@ -1041,10 +1088,44 @@ namespace
 		RivalTreeNodeBase* result = LOLMBDA::recurse(root, target);
 		return result;
 	}
+
+	template<typename Node>
+	static SizeType findNodeNumber(Node* root, Node* target)
+	{
+		struct LOLMBDA
+		{
+			static bool recurse(Node* n, Node* target, SizeType& result)
+			{
+				if (n == target)
+				{
+					return true;
+				}
+				++result;
+
+				for (SizeType i = 0, end = getChildCount(n); i < end; i++)
+				{
+					if (recurse((Node*)getNthChild(n, i), target, result))
+						return true;
+				}
+				return false;
+			}
+		};
+
+		SizeType result = 0;
+		if (!LOLMBDA::recurse(root, target, result))
+		{
+			FLAT_ASSERT(!"Couldn't find target node.");
+		}
+		else
+		{
+			FLAT_ASSERT(getNthNode(root, result) == target);
+		}
+		return result;
+	}
 }
 
 template<typename Tree>
-void test_addChild(Tree& tree, SizeType nodeCount, SizeType parentIndex, const Transform& value)
+SizeType test_addChild(Tree& tree, SizeType nodeCount, SizeType parentIndex)
 {
 	typedef Tree::Node Node;
 	Node* parentNode = NULL;
@@ -1055,7 +1136,9 @@ void test_addChild(Tree& tree, SizeType nodeCount, SizeType parentIndex, const T
 	}
 	FLAT_ASSERT(parentIndex == 0 || isChildOf(parentNode, tree.root));
 
+	Transform value = makeTransform();
 	Node* node = NULL;
+
 	{
 		ScopedProfiler prof(getStat(StatAdd));
 		node = tree.createNode(value, parentNode);
@@ -1063,6 +1146,7 @@ void test_addChild(Tree& tree, SizeType nodeCount, SizeType parentIndex, const T
 	FLAT_ASSERT(isChildOf(node, tree.root));
 
 	FLAT_ASSERT(findCount(tree.root) == 1 + nodeCount);
+	return findNodeNumber(tree.root, node);
 }
 
 template<typename Tree>

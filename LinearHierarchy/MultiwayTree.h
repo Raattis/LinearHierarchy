@@ -139,16 +139,23 @@ void connectToParent(MultiwayTreeNodeBase* node, MultiwayTreeNodeBase* parent)
 			}
 			else
 			{
-				MultiwayTreeNodeBase* child = parent->child;
-
-				bool inserted = false;
-				while (child->sibling != NULL && !Sorter::isFirst(((Node*)node)->value, ((Node*)child->sibling)->value))
+				if (Sorter::isFirst(((Node*)node)->value, ((Node*)parent->child)->value))
 				{
-					child = child->sibling;
+					node->sibling = parent->child;
+					parent->child = node;
 				}
+				else
+				{
+					MultiwayTreeNodeBase* left = parent->child;
 
-				node->sibling = child->sibling;
-				child->sibling = node;
+					while (left->sibling != NULL && !Sorter::isFirst(((Node*)node)->value, ((Node*)left->sibling)->value))
+					{
+						left = left->sibling;
+					}
+
+					node->sibling = left->sibling;
+					left->sibling = node;
+				}
 			}
 		}
 		else
