@@ -1,7 +1,6 @@
 import pygame, math
 from pygame import Rect
 
-
 def pause():
     get_out = False
     while not get_out:
@@ -123,10 +122,6 @@ def make_chart(surface, name, headers, series_names, series, maxValue):
             y = (1 - (ser[i] / maxValue)) * float(chart_margins.height) + float(chart_margins.top)
             points.append((x, y))
             
-            #t = '{0:.{1}f}'.format(ser[i], height_label_digits)
-            #text = label_font.render(t, True, (10,10,10))
-            #surface.blit(text, (x - text.get_width() * 0.5, y - text.get_height()))
-            
         pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
         move_points(points, 1,0)
         pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
@@ -134,7 +129,7 @@ def make_chart(surface, name, headers, series_names, series, maxValue):
         pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
         move_points(points, 0,-1)
         pygame.draw.aalines(surface, colors[series_names[j]], False, points, 1)
-        move_points(points, -1,0)
+        move_points(points, -1,1)
         
         symbol = symbols[series_names[j]]
         for p in points:
@@ -155,7 +150,7 @@ def make_chart(surface, name, headers, series_names, series, maxValue):
         pygame.draw.line(surface, colors[series_names[i]], (x - 25, y), (x - 5, y), 3)
         
         symbol = symbols[series_names[i]]
-        surface.blit(symbol, (x - 15 - symbol.get_width() * 0.5, y - symbol.get_height() * 0.5 - 1))
+        surface.blit(symbol, (x - 15 - symbol.get_width() * 0.5, y - symbol.get_height() * 0.5))
 
     pygame.display.flip()
 
@@ -207,6 +202,18 @@ def remove(del_name, names, series):
         result_series.append(series[row][:])
     return result_series, result_names
 
+def make_point(image_name, color):
+    surface = pygame.image.load('./points/' + image_name + '.png')
+    surface.convert_alpha()
+
+    c = pygame.Color(color[0], color[1], color[2])
+    for x in range(surface.get_width()):
+        for y in range(surface.get_height()):
+            c.a = surface.get_at((x,y)).a
+            surface.set_at((x,y), c)
+    surface = pygame.transform.smoothscale(surface, (int(resolution[1]*0.015),int(resolution[1]*0.015)))
+    return surface
+
 def main():
     global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols, name_prefix
 
@@ -236,13 +243,13 @@ def main():
     colors["Naive Multiway"] = (250,20,250)
     
     symbols = {}
-    symbols["Flat"] = legend_font.render("o", True, colors["Flat"])
-    symbols["Flat cached"] = legend_font.render("o", True, colors["Flat cached"])
-    symbols["Flat cold"] = legend_font.render("o", True, colors["Flat cold"])
-    symbols["Pooled Pointer"] = legend_font.render("o", True, colors["Pooled Pointer"])
-    symbols["Naive Pointer"] = legend_font.render("o", True, colors["Naive Pointer"])
-    symbols["Pooled Multiway"] = legend_font.render("o", True, colors["Pooled Multiway"])
-    symbols["Naive Multiway"] = legend_font.render("o", True, colors["Naive Multiway"])
+    symbols["Flat"] = make_point("triangle", colors["Flat"])
+    symbols["Flat cached"] = make_point("circle", colors["Flat cached"])
+    symbols["Flat cold"] = make_point("square", colors["Flat cold"])
+    symbols["Pooled Pointer"] = make_point("ellipse", colors["Pooled Pointer"])
+    symbols["Naive Pointer"] = make_point("salmiakki", colors["Naive Pointer"])
+    symbols["Pooled Multiway"] = make_point("flipped_triangle", colors["Pooled Multiway"])
+    symbols["Naive Multiway"] = make_point("rectangle", colors["Naive Multiway"])
 
     lines = None
 
