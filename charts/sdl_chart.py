@@ -300,6 +300,8 @@ def main():
             make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, find_max_value(data_series))
             
             temp_series, temp_series_names = remove("Flat cold", data_series_names, data_series)
+            temp_series, temp_series_names = remove("Naive Multiway", temp_series_names, temp_series)
+            temp_series, temp_series_names = remove("Pooled Multiway", temp_series_names, temp_series)
             make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, find_max_value(temp_series))
             
             temp_series = normalize(data_series_headers, data_series)
