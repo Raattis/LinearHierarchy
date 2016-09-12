@@ -1,17 +1,19 @@
-This is a test program for three different tree data structures.
+This is a real world performance test program for three different tree data structures.
 
 The tree types are
 * Left-child right-sibling binary tree
  * (https://en.wikipedia.org/wiki/Left_child_right_sibling)
 * Child array tree
+ * naive but intuitive
 * Flat array tree
+ * new
 
 The test executes following operations on all of the trees.
 * add node
-* move subtree to a different parent node
 * traverse from root to a random leaf
 * find maximum depth of the tree
 * read every node of the tree in depth search order
+* move subtree to a different parent node
 * delete subtree
 
 Additionally following operations are executed only on the pointer based trees. Flat array is excluded these are just simple look-up operations on it.
@@ -20,10 +22,7 @@ Additionally following operations are executed only on the pointer based trees. 
 
 The test are run using multiple different tree sizes. The sizes span from 10 nodes to 25,000 nodes. Additionally the test are repeated multiple times to mitigate random variance between executions.
 
-The CPU cache gets flushed before every measurement to ensure a clean execution state. This cache flushing is achieved by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The majority of the programs execution time spent doing this.
-
-
-
+The CPU cache is flushed before every measurement to ensure a clean execution state. The flushing is achieved by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The majority of the programs execution time is infact spent doing this.
 
 
 # Data structures
@@ -44,11 +43,11 @@ struct Tree
 };
 ```
 
-While its nodes are small it suffers from linked-list like cache performance. This can to some extent be alleviated by allocating the Nodes from a pool as that way they will be more likely in local cache.
+While its nodes are small it suffers from linked-list like cache performance. This can to some extent be alleviated by allocating the nodes from a pool as that way they are be more likely in the same cache line as related nodes.
 
-Nodes have no knowledge of their parent nodes. Finding a Node's parent requires recursing through whole the tree. This greatly affects the trees node deletion performance in particular as the node pointing to the one being deleted must be searched and manipulated.
+In this tree nodes have no knowledge of their parent nodes. Finding a parent of a node requires recursing through the whole tree. This greatly affects the trees node deletion performance in particular as the node pointing to the one being deleted must be searched and its pointers be manipulated.
 
-Additions are fast in this tree 
+Additions are fast in this tree. That is as long as the future parent of the node is already fetched.
 
 More info here: https://en.wikipedia.org/wiki/Left-node_right-sibling_binary_tree
 
@@ -122,7 +121,19 @@ which can be visualized like this:
                                              node_1_2_1
 ```
 
-Arranging the data thightly like this is ideal for cache performance. Any related nodes are likely to be close by in memory. The trees whole structure is conveyed by the integer array making it fast to search. The cache performance can be further improved by 
+Packing the data thightly is ideal for cache performance as any related nodes are likely to be close by in memory. The topology of the tree is completely conveyed by the integer array alone making it fast to process.
+
+Subtrees in this tree are contiguous blocks of memory, which makes shifting and removing them surprisingly efficient.
+
+The performance of this tree can be further improved by introducing cached look-up tables. These look-up tables can hold any value related to every node such as parent, sibling or last descendant of the node. Since the data is in an array, it is simple and efficient to gather the necessary information for any of the mentioned look-up table types.
+
+Operations that benefit from having a cache table include
+* finding an Nth child of a node
+ * cache type: next sibling cache
+* deleting or moving a subtree
+ * cache type: last descendant cache
+* finding any of the node's ancestors in a single step
+ * cache type: depth parent cache, requires 2D array, depth * count
 
 
 # Test tree topology
@@ -154,4 +165,4 @@ The tree's topology can be described recursively as follows:
 
 Although the tree's topology is deterministic the ordering of child nodes is randomized. This varies the shape of the tree somewhat. The shape ARE identical between all tree types.
 
-This shape was chosen as it roughly resembles real world tree structures. It is complicated enough to make branch prediction difficulty and automatic compiler optimizations impossible, while still being simple to construct.
+This topology was chosen as it roughly resembles real world tree structures. It is complicated enough to make branch prediction difficulty and automatic compiler optimizations impossible, while still being simple to construct iteratively.
