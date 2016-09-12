@@ -2,6 +2,7 @@ This is a test program for three different tree data structures.
 
 The tree types are
 * Left-child right-sibling binary tree
+ * (https://en.wikipedia.org/wiki/Left_child_right_sibling)
 * Child array tree
 * Flat array tree
 
@@ -124,4 +125,33 @@ which can be visualized like this:
 Arranging the data thightly like this is ideal for cache performance. Any related nodes are likely to be close by in memory. The trees whole structure is conveyed by the integer array making it fast to search. The cache performance can be further improved by 
 
 
+# Test tree topology
 
+The topology of the tree that is created on every test execution is deterministic and always the same.
+
+The tree is built in a growing saw-tooth pattern:
+* 1. root's first child has two children
+* 1.1. first of these children has one child
+* 1.1.1. it has no children
+* 1.2. second has none
+* 2. root's second child has three children
+* 2.1. first of them has two children
+* 2.1.1. first of those has one child
+* 2.1.1.1. which has none
+* 2.1.2. second has none
+* 2.2. second has one child
+* 2.2.1. which has none
+* 2.3. third has none
+* 3. root's third child has four children
+* ...
+
+The tree's topology can be described recursively as follows:
+* Child count for root's direct children:
+ * ```childCount = 2 + childIndex```
+* Child count for every other node
+ * ```childCount = parent's childCount - childIndex - 1```
+* New nodes are added until target node count is reached.
+
+Although the tree's topology is deterministic the ordering of child nodes is randomized. This varies the shape of the tree somewhat. The shape ARE identical between all tree types.
+
+This shape was chosen as it roughly resembles real world tree structures. It is complicated enough to make branch prediction difficulty and automatic compiler optimizations impossible, while still being simple to construct.
