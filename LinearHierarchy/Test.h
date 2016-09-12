@@ -588,6 +588,17 @@ void testTree()
 				}
 			}
 
+			for (SizeType doTravels = 0; doTravels < TestNodeCount * 0.2; doTravels++)
+			{
+				test_travelToLeaf(t, nodeCount);
+			}
+			for (SizeType doFind = 0; doFind < TestNodeCount * 0.1; doFind++)
+			{
+				test_findDepthAndCount(t, nodeCount);
+			}
+
+			test_multiplyTransforms(t, nodeCount, 3);
+
 			for (SizeType doMoves = 0; doMoves < TestNodeCount * 0.1 || doMoves < 2; doMoves++)
 			{
 				SizeType parent = Random::get(1, nodeCount - 2);
@@ -599,17 +610,7 @@ void testTree()
 					test_setHash(t);
 				}
 			}
-			for (SizeType doTravels = 0; doTravels < TestNodeCount * 0.2; doTravels++)
-			{
-				test_travelToLeaf(t, nodeCount);
-			}
-			for (SizeType doFind = 0; doFind < TestNodeCount * 0.1; doFind++)
-			{
-				test_findDepthAndCount(t, nodeCount);
-			}
 
-			test_multiplyTransforms(t, nodeCount, 3);
-			
 			while (nodeCount > TestNodeCount * 0.8 && nodeCount > 2)
 			{
 				SizeType child = Random::get(1, nodeCount);
