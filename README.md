@@ -163,6 +163,6 @@ The tree's topology can be described recursively as follows:
  * ```childCount = parent's childCount - childIndex - 1```
 * New nodes are added until target node count is reached.
 
-Although the tree's topology is deterministic the ordering of child nodes is randomized. This varies the shape of the tree somewhat. The shape ARE identical between all tree types.
+Although the tree's topology is deterministic the ordering of child nodes is randomized. This varies the shape of the tree somewhat. Both the topology and the shape of the built tree is identical for every tested tree structure type to ensure fair evaluation.
 
 This topology was chosen as it roughly resembles real world tree structures. It is complicated enough to make branch prediction difficulty and automatic compiler optimizations impossible, while still being simple to construct iteratively.
