@@ -4,11 +4,11 @@ The tree types are
 * Left-child right-sibling binary tree
  * (https://en.wikipedia.org/wiki/Left_child_right_sibling)
 * Child array tree
- * naive but intuitive
+ * naive and intuitive
 * Flat array tree
  * new
 
-The test executes following operations on all of the trees.
+The test executes following operations on every tree type.
 * add node
 * traverse from root to a random leaf
 * find maximum depth of the tree
@@ -16,14 +16,13 @@ The test executes following operations on all of the trees.
 * move subtree to a different parent node
 * delete subtree
 
-Additionally following operations are executed only on the pointer based trees. Flat array is excluded these are just simple look-up operations on it.
+Additionally the following operations are executed only on the pointer based trees. Flat array is excluded from these tests as they are just simple look-up operations on it.
 * count nodes
 * travel to the tree's Nth node in depth search order
 
-The test are run using multiple different tree sizes. The sizes span from 10 nodes to 25,000 nodes. Additionally the test are repeated multiple times to mitigate random variance between executions.
+The tests are run using multiple different tree sizes ranging from 10 nodes to 25,000 nodes. Every test is repeated several times as to mitigate random variance caused by the testing environment.
 
-The CPU cache is flushed before every measurement to ensure a clean execution state. The flushing is achieved by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The majority of the programs execution time is infact spent doing this.
-
+Tests are timed one operation at a time to ensure that CPU cache is in a clean state during the test. The CPU cache is flushed before every measurement by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The vast majority of the program's execution time is spent doing this.
 
 # Data structures
 
@@ -43,16 +42,16 @@ struct Tree
 };
 ```
 
-While its nodes are small it suffers from linked-list like cache performance. This can to some extent be alleviated by allocating the nodes from a pool as that way they are be more likely in the same cache line as related nodes.
+While its nodes are small it suffers from linked-list like cache performance. This can to some extent be alleviated by allocating the nodes from a pool. This way it is more likely that related nodes are in a same cache line.
 
-In this tree nodes have no knowledge of their parent nodes. Finding a parent of a node requires recursing through the whole tree. This greatly affects the trees node deletion performance in particular as the node pointing to the one being deleted must be searched and its pointers be manipulated.
+In this tree nodes have no knowledge of their parent. Finding a parent of a node requires recursing through the whole tree. This greatly affects the trees node deletion performance in particular as the node pointing to the one being deleted must be searched and its pointers be manipulated.
 
-Additions are fast in this tree. That is as long as the future parent of the node is already fetched.
+Additions are fast in this tree as they only require manipulation of a single pointer. That being said, searching and fetching the node that will point to the created node is slow.
 
 More info here: https://en.wikipedia.org/wiki/Left-node_right-sibling_binary_tree
 
 ## Child array tree
-Child array tree is a somewhat naïve but still viable data structure - it's the first thing that usually comes to mind when thinking of trees with multiple child nodes. Every node consists of a parent pointer and an array of child pointers. Additionally the node can also have left and right sibling pointers which I have decided to include as several implementations I happened to come across had them.
+Child array tree is a naïve but still viable data structure in most cases - it's the first thing that usually comes to mind when thinking of trees with multiple child nodes. Every node consists of a parent pointer and an array of child pointers. Additionally the node can also have left and right sibling pointers, which I have decided to include as several implementations I happened to come across had them.
 
 ```
 struct Node
@@ -69,14 +68,12 @@ struct Tree
 };
 ```
 
-Child array trees child nodes are, as the name suggests, in an array which enables random order accessing. Though, this is somewhat undermined by the fact that the nodes still have to be referenced by pointer. 
+Child nodes in the child array tree are, as the name suggests, in an array which enables random order accessing. Though, this is somewhat undermined by the fact that the nodes still have to be referenced by pointer, and any information about them can cause a possible cache miss.
 
-While compared to left-child right-sibling binary tree, child array tree is much less like linked-list, its cache performance can still be greatly improved by pooling the nodes.
-
-
+While, compared to left-child right-sibling binary tree, child array tree is much less like linked-list its cache performance can still be greatly improved by allocating the nodes from a pool.
 
 ## Flat array tree
-Flat array tree is (as far as I know) a new data structure to contain tree structures. It doesn't have explicit node structures, instead it consists of a meaningfully ordered array of values paired with a same length array of depth values.
+Flat array tree is (as far as I know) a new data structure to describe a tree. It doesn't have explicit node objects, instead it consists of a meaningfully ordered array of values paired with a same length array of depth values.
 
 ```
 struct Tree
@@ -89,6 +86,7 @@ struct Tree
 The tree is formed by ordering the values in depth search order. Every node is assigned a corresponding integer value that tells the node's depth in the tree.
 
 ### Sample tree
+This sample tree
 ```
                  root
              /    |     \
@@ -105,12 +103,12 @@ The tree is formed by ordering the values in depth search order. Every node is a
           node_1_2_1
 
 ```
-turns into two arrays 
+corresponds to this block of memory
 ```
 values:    root, node_1, node_1_1, node_1_2, node_1_2_1, node_2, node_2_1, node_3
 depths:    0,    1,      2,        2,        3,          1,      2,        1
 ```
-which can be visualized like this:
+which can be more clearly visualized like this:
 ```
            root---v----------------------------------------v-----------------v
                   |                                        |                 |
@@ -121,19 +119,19 @@ which can be visualized like this:
                                              node_1_2_1
 ```
 
-Packing the data thightly is ideal for cache performance as any related nodes are likely to be close by in memory. The topology of the tree is completely conveyed by the integer array alone making it fast to process.
+Packing the data thightly is ideal for cache performance as any related nodes are likely to be close by in memory. The topology of the tree is completely conveyed by the depth array alone making it fast to seek through.
 
-Subtrees in this tree are contiguous blocks of memory, which makes shifting and removing them surprisingly efficient.
+Subtrees in this tree are contiguous blocks of memory, which makes shifting and removing them rather efficient.
 
-The performance of this tree can be further improved by introducing cached look-up tables. These look-up tables can hold any value related to every node such as parent, sibling or last descendant of the node. Since the data is in an array, it is simple and efficient to gather the necessary information for any of the mentioned look-up table types.
+The performance of this tree can be further improved by introducing cached look-up tables. These look-up tables usually hold index values related to the corresponding node such as parent, sibling or last descendant of the node. Since the data is a simple array, it is efficient to gather usually in a single pass.
 
 Operations that benefit from having a cache table include
 * finding an Nth child of a node
  * cache type: next sibling cache
 * deleting or moving a subtree
  * cache type: last descendant cache
-* finding any of the node's ancestors in a single step
- * cache type: depth parent cache, requires 2D array, depth * count
+* finding any one of the node's ancestors in a single step
+ * cache type: deep parent cache, depth * count, 2D array
 
 
 # Test tree topology
@@ -159,7 +157,7 @@ The tree is built in a growing saw-tooth pattern:
 The tree's topology can be described recursively as follows:
 * Child count for root's direct children:
  * ```childCount = 2 + childIndex```
-* Child count for every other node
+* Child count for all of the other nodes
  * ```childCount = parent's childCount - childIndex - 1```
 * New nodes are added until target node count is reached.
 
