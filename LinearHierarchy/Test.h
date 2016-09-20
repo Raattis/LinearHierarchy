@@ -16,7 +16,7 @@
 #include "MultiwayTree.h"
 
 #include <stdio.h>      /* printf */
-#include <windows.h>
+#include <windows.h> /* QueryPerformanceCounter, QueryPerformanceFrequency */
 
 typedef uint32_t SizeType;
 
@@ -25,15 +25,22 @@ const SizeType ArrTestSizesCount = 3;
 const SizeType ArrTestRoundNumbers[] = { 50, 25, 10 };
 const SizeType ArrTestSizes[]        = { 10, 25, 50 };
 
+#elif !defined(MAX_PERF)
+const SizeType ArrTestSizesCount = 5;
+const SizeType ArrTestRoundNumbers[] = { 100,  50,  20,    10,   5};
+const SizeType ArrTestSizes[]        = { 10,   25,  50,    100,  250};
+
 #elif true //&& false
 const SizeType ArrTestSizesCount = 11;
 const SizeType ArrTestRoundNumbers[] = { 1000,  500,  500,    500,   100,  100,     30,   10,    5,     3,     3 };
 const SizeType ArrTestSizes[]        = {   10,   25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
 
 #else
-const SizeType ArrTestSizesCount = 6;
-const SizeType ArrTestRoundNumbers[] = { 50, 10,  2,   2,   2,   2,    2,    2,    2,     2,     2 };
-const SizeType ArrTestSizes[]        = { 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000 };
+const SizeType ArrTestSizesCount = 16;
+const SizeType ArrTestRoundNumbers[] = { 200, 200, 200, 200, 200, 200, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100 };
+const SizeType ArrTestSizes[] = { 4,5,6,7,8,9,10,11,12,13,15,17,19,23,27,31,35 };
+//const SizeType ArrTestRoundNumbers[] = { 50, 10,  2,   2,   2,   2,    2,    2,    2,     2,     2 };
+//const SizeType ArrTestSizes[]        = { 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000 };
 
 #endif
 
@@ -64,14 +71,14 @@ enum
 
 const uint32_t TestMask
 	=
-	//Flat1 |
+	Flat1 |
 	//Flat2 |
 	//Flat3 |
-	//Rival |
+	Rival |
 	Naive |
 	Nulti |
-	//Multi |
-	Every |
+	Multi |
+	//Every |
 #ifdef MAX_PERF
 	Every |
 #endif
@@ -245,6 +252,45 @@ namespace // Logger
 	}
 }
 
+static void heapsort(double* a, SizeType n)
+{
+	struct LOLMBDA
+	{
+		static void max_heapify(double *a, SizeType i, SizeType n)
+		{
+			double temp = a[i];
+			SizeType j = 2 * i;
+			while (j <= n)
+			{
+				if (j < n && a[j + 1] > a[j])
+					j = j + 1;
+				if (temp > a[j])
+					break;
+				else if (temp <= a[j])
+				{
+					a[j / 2] = a[j];
+					j = 2 * j;
+				}
+			}
+			a[j / 2] = temp;
+			return;
+		}
+	};
+
+	a -= 1;
+	for (SizeType i = n / 2; i >= 1; i--)
+	{
+		LOLMBDA::max_heapify(a, i, n);
+	}
+	for (SizeType i = n; i >= 2; i--)
+	{
+		double temp = a[i];
+		a[i] = a[1];
+		a[1] = temp;
+		LOLMBDA::max_heapify(a, 1, i - 1);
+	}
+}
+
 namespace // Result storage
 {
 	enum StatNumber
@@ -263,46 +309,96 @@ namespace // Result storage
 		StatCalcCount = 10,
 		StatTravelDepth = 11,
 		StatTravelMax = 12,
-		StatTransformIt1 = 13,
-		StatTransformIt10 = 14,
-		StatMax = 15,
+		StatFindNode = 13,
+		StatTransformIt1 = 14,
+		StatTransformIt10 = 15,
+		StatMax = 16,
 	};
 
 	// tree type, tree size, statistics
-	double   baseTestStats[TreeCount][15][StatMax] = {};
-	uint32_t baseTestCounts[TreeCount][15][StatMax] = {};
+	FLAT_VECTOR<double> allStats[TreeCount][ArrTestSizesCount][StatMax] = {};
 
 	uint32_t CurrentTreeType = 0;
 	uint32_t CurrentTreeSize = 0;
 
+	void addStat(StatNumber statNumber, double value)
+	{
+		FLAT_ASSERT(statNumber < StatMax);
+		allStats[CurrentTreeType][CurrentTreeSize][statNumber].pushBack(value);
+	}
+
 	double* getStat(StatNumber statNumber)
 	{
 		FLAT_ASSERT(statNumber < StatMax);
-		++(baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
-		return &baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		allStats[CurrentTreeType][CurrentTreeSize][statNumber].pushBack(0.0);
+		return &allStats[CurrentTreeType][CurrentTreeSize][statNumber].getBack();
 	}
-	double maxStat(StatNumber statNumber, double value)
+	void maxStat(StatNumber statNumber, double value)
 	{
 		FLAT_ASSERT(statNumber < StatMax);
-		if (baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] < value)
-			baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] = value;
-		return baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		allStats[CurrentTreeType][CurrentTreeSize][statNumber].pushBack(value);
 	}
 	double maxStat(StatNumber statNumber)
 	{
-		return maxStat(statNumber, -10000000);
+		FLAT_ASSERT(statNumber < StatMax);
+		double result = 0;
+		for (SizeType i = 0; i < allStats[CurrentTreeType][CurrentTreeSize][statNumber].getSize(); i++)
+		{
+			if (result < allStats[CurrentTreeType][CurrentTreeSize][statNumber][i])
+				result = allStats[CurrentTreeType][CurrentTreeSize][statNumber][i];
+		}
+
+		return result;
 	}
 	double avgStat(StatNumber statNumber)
 	{
 		FLAT_ASSERT(statNumber < StatMax);
-		if (baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber] == 0)
+		double sum = 0.0;
+		for (SizeType i = 0; i < allStats[CurrentTreeType][CurrentTreeSize][statNumber].getSize(); i++)
+		{
+			sum += allStats[CurrentTreeType][CurrentTreeSize][statNumber][i];
+		}
+		return sum / allStats[CurrentTreeType][CurrentTreeSize][statNumber].getSize();
+	}
+	void sort(StatNumber statNumber)
+	{
+		FLAT_VECTOR<double>& arr = allStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		heapsort(arr.getPointer(), arr.getSize());
+	}
+	double medianStat(StatNumber statNumber)
+	{
+		FLAT_ASSERT(statNumber < StatMax);
+		FLAT_VECTOR<double>& arr = allStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		if (arr.getSize() == 0)
 			return 0;
-		return baseTestStats[CurrentTreeType][CurrentTreeSize][statNumber] / double(baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber]);
+
+		sort(statNumber);
+		return arr[arr.getSize() / 2];
+	}
+	double lowTenthStat(StatNumber statNumber)
+	{
+		FLAT_ASSERT(statNumber < StatMax);
+		FLAT_VECTOR<double>& arr = allStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		if (arr.getSize() < 10)
+			return 0;
+
+		sort(statNumber);
+		return arr[arr.getSize() / 10];
+	}
+	double highTenthStat(StatNumber statNumber)
+	{
+		FLAT_ASSERT(statNumber < StatMax);
+		FLAT_VECTOR<double>& arr = allStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		if (arr.getSize() < 10)
+			return 0;
+
+		sort(statNumber);
+		return arr[arr.getSize() * 9 / 10];
 	}
 	SizeType countStat(StatNumber statNumber)
 	{
 		FLAT_ASSERT(statNumber < StatMax);
-		return baseTestCounts[CurrentTreeType][CurrentTreeSize][statNumber];
+		return allStats[CurrentTreeType][CurrentTreeSize][statNumber].getSize();
 	}
 }
 
@@ -588,9 +684,13 @@ void testTree()
 				}
 			}
 
-			for (SizeType doTravels = 0; doTravels < TestNodeCount * 0.2; doTravels++)
+			for (SizeType targetNode = 1; targetNode < TestNodeCount; targetNode++)
 			{
-				test_travelToLeaf(t, nodeCount);
+				test_travelToLeaf(t, nodeCount, targetNode);
+			}
+			for (SizeType targetNode = 1; targetNode < TestNodeCount; targetNode++)
+			{
+				test_findNode(t, nodeCount, targetNode);
 			}
 			for (SizeType doFind = 0; doFind < TestNodeCount * 0.1; doFind++)
 			{
@@ -610,7 +710,7 @@ void testTree()
 					test_setHash(t);
 				}
 			}
-
+ 
 			while (nodeCount > TestNodeCount * 0.8 && nodeCount > 2)
 			{
 				SizeType child = Random::get(1, nodeCount);
@@ -645,6 +745,7 @@ void testTree()
 		printf("Average CalcCount   -\t%d\t-  %.4lf us\n", PRTINT_HALP(CalcCount));
 		printf("Average NthNode     -\t%d\t-  %.4lf us\n", PRTINT_HALP(NthNode));
 		printf("Average LeafTravel  -\t%d\t-  %.4lf us\n", PRTINT_HALP(LeafTravel));
+		printf("Average FindNode    -\t%d\t-  %.4lf us\n", PRTINT_HALP(FindNode));
 		printf("Average Transform1  -\t%d\t-  %.4lf us\n", PRTINT_HALP(TransformIt1));
 		printf("Average Transform10 -\t%d\t-  %.4lf us\n", PRTINT_HALP(TransformIt10));
 #undef PRTINT_HALP
@@ -714,7 +815,6 @@ SizeType test_addChild(FlatHierarchy<Transform, TransformSorter>& tree, SizeType
 	SizeType childIndex = ~0U;
 
 	Transform value = makeTransform();
-	shuffleMemory();
 
 	if (FLAT_NO_CACHE_CONDITION)
 	{
@@ -749,7 +849,7 @@ void test_moveChildren(FlatHierarchy<Transform, TransformSorter>& tree, SizeType
 		FLAT_ASSERT(!"No condition matched");
 }
 
-void test_travelToLeaf(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount)
+void test_travelToLeaf(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType travelIndex)
 {
 	// travel to leaf
 
@@ -800,6 +900,28 @@ void test_travelToLeaf(const FlatHierarchy<Transform, TransformSorter>& tree, Si
 	maxStat(StatTravelMax, travelLoopCount);
 }
 
+void test_findNode(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, SizeType targetNode)
+{
+	if (!FLAT_NO_CACHE_CONDITION) // No cached versions needed
+		return;
+
+	const Transform* targetTransform = tree.values.getPointer() + targetNode;
+
+	bool found = false;
+	{
+		ScopedProfiler prof(getStat(StatFindNode));
+		for (SizeType i = 0; i < nodeCount; i++)
+		{
+			if (targetTransform == tree.values.getPointer() + i)
+			{
+				found = true;
+				break;
+			}
+		}
+	}
+	FLAT_ASSERT(found);
+}
+
 void test_findDepthAndCount(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount)
 {
 	SizeType depth = 0;
@@ -824,7 +946,7 @@ void test_findDepthAndCount(const FlatHierarchy<Transform, TransformSorter>& tre
 
 void test_multiplyTransforms(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, const SizeType TransformIterations)
 {
-	if (CurrentTreeType != 0)
+	if (!FLAT_NO_CACHE_CONDITION) // No cached versions needed
 		return;
 
 	FLAT_VECTOR<Transform> resultTransforms;
@@ -1194,7 +1316,7 @@ void test_moveChildren(Tree& tree, SizeType nodeCount, SizeType childIndex, Size
 }
 
 template<typename Tree>
-void test_travelToLeaf(const Tree& tree, SizeType nodeCount)
+void test_travelToLeaf(const Tree& tree, SizeType nodeCount, SizeType travelIndex)
 {
 	// travel to leaf
 
@@ -1216,6 +1338,40 @@ void test_travelToLeaf(const Tree& tree, SizeType nodeCount)
 
 	*getStat(StatTravelDepth) += travelLoopCount;
 	maxStat(StatTravelMax, travelLoopCount);
+}
+
+template<typename Tree>
+void test_findNode(const Tree& tree, SizeType nodeCount, SizeType targetNode)
+{
+	Transform* targetTransform = NULL;
+	{
+		Tree::Node* node = (Tree::Node*)getNthNode(tree.root, targetNode);
+		FLAT_ASSERT(node);
+		targetTransform = &node->value;
+	}
+
+	struct LOLMBDA
+	{
+		static bool find(Tree::Node* node, Transform* targetTransform)
+		{
+			if(targetTransform == &node->value)
+				return true;
+
+			for (SizeType i = 0, end = getChildCount(node); i < end; i++)
+			{
+				if (find((Tree::Node*)getNthChild(node, i), targetTransform))
+					return true;
+			}
+			return false;
+		}
+	};
+
+	bool found = false;
+	{
+		ScopedProfiler prof(getStat(StatFindNode));
+		found = LOLMBDA::find(tree.root, targetTransform);
+	}
+	FLAT_ASSERT(found);
 }
 
 template<typename Tree>
@@ -1541,11 +1697,11 @@ void test()
 		logTable("Max Travel Depth\t");
 		logTable("Average Travel Depth\n\t");
 		logTableDouble(maxStat(StatCountMax));
-		logTableDouble(avgStat(StatCountAvg));
+		logTableDouble(medianStat(StatCountAvg));
 		logTableDouble(maxStat(StatDepthMax));
 		logTableDouble(maxStat(StatDepthAvg));
 		logTableDouble(maxStat(StatTravelDepth));
-		logTableDouble(avgStat(StatTravelDepth));
+		logTableDouble(medianStat(StatTravelDepth));
 		logTable("\n");
 	}
 
@@ -1572,6 +1728,7 @@ void test()
 			"Find count",
 			"Traveled depth average",
 			"Travel depth max",
+			"Find node",
 			"Transform mult first",
 			"Transform mult last" };
 
@@ -1594,7 +1751,7 @@ void test()
 				if(stat == StatTravelMax)
 					logTableInt((uint32_t)maxStat(stat));
 				else
-					logTableDouble(avgStat(stat));
+					logTableDouble(medianStat(stat));
 			}
 			logTable("\n");
 			if (treeType + 1 < TreeCount)

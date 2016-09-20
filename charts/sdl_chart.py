@@ -18,6 +18,9 @@ def pause():
 
 def make_chart(surface, name, headers, series_names, series, maxValue):
     global image_counter
+
+    if(maxValue == 0):
+        return
     
     distances = []
     if True:
@@ -272,10 +275,9 @@ def main():
         table.append(line.rstrip().split('\t'))
         print(len(table), table[-1])
 
-    for test_number in range(0, 11):
-        i = test_number * 8 + 2
+    for i in range(2, len(table), 8):
         chart_name = table[i + 1][0]
-        
+        print(chart_name)
         
         data_series_names = []
         data_series_names.append(table[i + 1][1])
@@ -364,7 +366,7 @@ def main():
 
             make_chart(screen, chart_name + " normalized", data_series_headers, temp_series_names, normalize(data_series_headers, temp_series), find_max_value(normalize(data_series_headers, temp_series)))
             
-        elif "Transform" in chart_name:
+        elif "Transform" in chart_name or "Find node" == chart_name:
             temp_series, temp_series_names = remove("Flat cached", data_series_names, data_series)
             temp_series, temp_series_names = remove("Flat cold", temp_series_names, temp_series)
             make_chart(screen, chart_name + "", data_series_headers, temp_series_names, temp_series, find_max_value(temp_series))
