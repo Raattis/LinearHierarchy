@@ -22,7 +22,7 @@ Additionally the following operations are executed only on the pointer based tre
 
 The tests are run using multiple different tree sizes ranging from 10 nodes to 25,000 nodes. Every test is repeated several times as to mitigate random variance caused by the testing environment.
 
-Tests are timed one operation at a time to ensure that CPU cache is in a clean state during the test. The CPU cache is flushed before every measurement by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The vast majority of the program's execution time is spent doing this.
+Tests are timed one operation at a time to ensure that CPU cache is in a clean state during the test. The CPU cache is flushed before every measurement by moving around several megabytes worth of heap memory via the CPU's memory pipeline. The vast majority of the program's execution time is spent doing this (around 99.75 %). From the perspective of the CPU this program mostly shuffles memory around and occasionally does some calculations.
 
 # Data structures
 
