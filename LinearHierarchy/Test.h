@@ -20,7 +20,7 @@
 
 typedef uint32_t SizeType;
 
-#ifdef _DEBUG
+#if defined(_DEBUG)
 const SizeType ArrTestSizesCount = 3;
 const SizeType ArrTestRoundNumbers[] = { 50, 25, 10 };
 const SizeType ArrTestSizes[]        = { 10, 25, 50 };
@@ -36,11 +36,11 @@ const SizeType ArrTestRoundNumbers[] = { 1000,  500,  500,    500,   100,  100, 
 const SizeType ArrTestSizes[]        = {   10,   25,   50,    100,   250,  500,   1000, 2500, 5000, 10000, 25000 };
 
 #else
-const SizeType ArrTestSizesCount = 16;
-const SizeType ArrTestRoundNumbers[] = { 200, 200, 200, 200, 200, 200, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100 };
-const SizeType ArrTestSizes[] = { 4,5,6,7,8,9,10,11,12,13,15,17,19,23,27,31,35 };
-//const SizeType ArrTestRoundNumbers[] = { 50, 10,  2,   2,   2,   2,    2,    2,    2,     2,     2 };
-//const SizeType ArrTestSizes[]        = { 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000 };
+const SizeType ArrTestSizesCount = 2;
+//const SizeType ArrTestRoundNumbers[] = { 200, 200, 200, 200, 200, 200, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100 };
+//const SizeType ArrTestSizes[] = { 4,5,6,7,8,9,10,11,12,13,15,17,19,23,27,31,35 };
+const SizeType ArrTestRoundNumbers[] = { 50, 10,  2,   2,   2,   2,    2,    2,    2,     2,     2 };
+const SizeType ArrTestSizes[]        = { 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000 };
 
 #endif
 
@@ -49,10 +49,12 @@ const SizeType ArrTestSizes[] = { 4,5,6,7,8,9,10,11,12,13,15,17,19,23,27,31,35 }
 const bool DoCacheFlushing = true;
 const bool VerbosePrinting = false;
 const bool CheckHashes = false;
+const bool OutputAllStats = false;
 #else
 const bool DoCacheFlushing = false;
 const bool VerbosePrinting = false;
 const bool CheckHashes = true;
+const bool OutputAllStats = false;
 #endif
 
 const SizeType TreeCount = 7;
@@ -74,8 +76,8 @@ const uint32_t TestMask
 	Flat1 |
 	//Flat2 |
 	//Flat3 |
-	Rival |
-	Naive |
+	//Rival |
+	//Naive |
 	Nulti |
 	Multi |
 	//Every |
@@ -400,6 +402,77 @@ namespace // Result storage
 		FLAT_ASSERT(statNumber < StatMax);
 		return allStats[CurrentTreeType][CurrentTreeSize][statNumber].getSize();
 	}
+
+
+	void print_all_stats(FILE* f)
+	{
+		const SizeType BufferCapacity = 4000;
+		char buffer[BufferCapacity];
+		SizeType bufferSize = 0;
+
+		for (SizeType treeType = 0; treeType < TreeCount; treeType++)
+		{
+			for (SizeType treeSize = 0; treeSize < ArrTestSizesCount; treeSize++)
+			{
+				static const char* treeNames[] = { "Flat", "Flat cached", "Flat cold", "Naive Pointer", "Pooled Pointer", "Naive Multiway", "Pooled Multiway" };
+
+				// Flush
+				if (bufferSize + 100 >= BufferCapacity)
+				{
+					buffer[bufferSize] = '\0';
+					fprintf(f, "%s", buffer);
+					bufferSize = 0;
+				}
+				bufferSize += sprintf_s(buffer + bufferSize, BufferCapacity - bufferSize, "%s\t%d\n", treeNames[treeType], ArrTestSizes[ArrTestSizesCount]);
+
+				for (SizeType statNumber = StatAdd; statNumber < StatMax; statNumber++)
+				{
+					static const char* statNames[] = {
+						"Add",
+						"Erase",
+						"Move",
+						"Nth Node",
+						"Leaf travel",
+						"Find max depth",
+						"Find count",
+						"Traveled depth average",
+						"Travel depth max",
+						"Find node",
+						"Transform mult first",
+						"Transform mult last" };
+
+					// Flush
+					if (bufferSize + 100 >= BufferCapacity)
+					{
+						buffer[bufferSize] = '\0';
+						fprintf(f, "%s", buffer);
+						bufferSize = 0;
+					}
+					bufferSize += sprintf_s(buffer + bufferSize, BufferCapacity - bufferSize, "%s", statNames[statNumber - StatAdd]);
+
+
+					for (SizeType stat = 0; stat < allStats[treeType][treeSize][statNumber].getSize(); stat++)
+					{
+						// Flush
+						if (bufferSize + 100 >= BufferCapacity)
+						{
+							buffer[bufferSize] = '\0';
+							fprintf(f, "%s", buffer);
+							bufferSize = 0;
+						}
+
+						bufferSize += sprintf_s(buffer + bufferSize, BufferCapacity - bufferSize, "\t%f", allStats[treeType][treeSize][statNumber][stat]);
+					}
+					bufferSize += sprintf_s(buffer + bufferSize, BufferCapacity - bufferSize, "\n");
+				}
+				bufferSize += sprintf_s(buffer + bufferSize, BufferCapacity - bufferSize, "\n");
+			}
+			bufferSize += sprintf_s(buffer + bufferSize, BufferCapacity - bufferSize, "\n");
+		}
+		
+		buffer[bufferSize] = '\0';
+		fprintf(f, "%s", buffer);
+	}
 }
 
 namespace
@@ -696,8 +769,10 @@ void testTree()
 			{
 				test_findDepthAndCount(t, nodeCount);
 			}
-
-			test_multiplyTransforms(t, nodeCount, 3);
+			for (SizeType i = 0; i < 20; i++)
+			{
+				test_multiplyTransforms(t, nodeCount, 3);
+			}
 
 			for (SizeType doMoves = 0; doMoves < TestNodeCount * 0.1 || doMoves < 2; doMoves++)
 			{
@@ -1020,6 +1095,9 @@ void test_removeNode(FlatHierarchy<Transform, TransformSorter>& tree, SizeType& 
 void test_print(const FlatHierarchy<Transform, TransformSorter>& tree)
 {
 #ifndef MAX_PERF
+	if (tree.getCount() * 5 >= 4096)
+		return;
+
 	struct LOLMBDA
 	{
 		static const char* getName(Transform& t, char* buffer)
@@ -1370,6 +1448,10 @@ void test_findNode(const Tree& tree, SizeType nodeCount, SizeType targetNode)
 	{
 		ScopedProfiler prof(getStat(StatFindNode));
 		found = LOLMBDA::find(tree.root, targetTransform);
+	}
+	if (!found)
+	{
+		printf("Error lol!");
 	}
 	FLAT_ASSERT(found);
 }
@@ -1775,13 +1857,34 @@ void test()
 	{
 		FILE* f = NULL;
 		errno_t err = fopen_s(&f, "output.csv", "w");
-		FLAT_ASSERT(err >= 0);
-		fprintf(f, "%s", LogBuffer);
-		fclose(f);
+		if (err >= 0)
+		{
+			fprintf(f, "%s", LogBuffer);
+			fclose(f);
+			printf("\nOutput saved to output.csv\n");
+		}
+		else
+		{
+			printf("Failed to open file output.csv. Error number: %d \n", err);
+		}
 
-		printf("\nOutput saved to output.csv\n");
 	}
 #endif
+
+	if(OutputAllStats)
+	{
+		FILE* f = NULL;
+		errno_t err = fopen_s(&f, "stats.csv", "w");
+		if(err >= 0)
+		{
+			print_all_stats(f);
+			fclose(f);
+		}
+		else
+		{
+			printf("Failed to open file stats.csv. Error number: %d \n", err);
+		}
+	}
 
 	// Print hashes
 	if(CheckHashes)

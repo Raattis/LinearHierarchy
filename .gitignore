@@ -425,3 +425,5 @@ PerfomanceTest/LinearHierarchy.iobj
 *.ipdb
 charts/*.png
 charts/*.csv
+charts/wanha/*.png
+LinearHierarchy/stats.csv
