@@ -226,7 +226,7 @@ struct TransformSorter
 
 namespace // Logger
 {
-	char LogBuffer[1024 * 16];
+	char LogBuffer[1024 * 1024];
 	SizeType LogBufferProgress = 0;
 	void logTable(const char* msg)
 	{
@@ -385,7 +385,15 @@ namespace // Result storage
 			return 0;
 
 		sort(statNumber);
-		return arr[arr.getSize() / 10];
+		return arr[arr.getSize() * 1 / 10];
+		//double sum = 0;
+		//SizeType start = arr.getSize() / 10;
+		//SizeType count = (arr.getSize() / 2 - arr.getSize() / 10);
+		//for (SizeType i = start; i < start + count; i++)
+		//{
+		//	sum += arr[i];
+		//}
+		//return sum / count;
 	}
 	double highTenthStat(StatNumber statNumber)
 	{
@@ -396,6 +404,14 @@ namespace // Result storage
 
 		sort(statNumber);
 		return arr[arr.getSize() * 9 / 10];
+		//double sum = 0;
+		//SizeType start = arr.getSize() / 2;
+		//SizeType count = (arr.getSize() / 2 - arr.getSize() / 10);
+		//for (SizeType i = start; i < start + count; i++)
+		//{
+		//	sum += arr[i];
+		//}
+		//return sum / count;
 	}
 	SizeType countStat(StatNumber statNumber)
 	{
@@ -1834,6 +1850,22 @@ void test()
 					logTableInt((uint32_t)maxStat(stat));
 				else
 					logTableDouble(medianStat(stat));
+			}
+			for (SizeType treeSize = 0; treeSize < ArrTestSizesCount; treeSize++)
+			{
+				CurrentTreeType = treeType;
+				CurrentTreeSize = treeSize;
+
+				if (stat != StatTravelMax && stat != StatTravelDepth)
+					logTableDouble(lowTenthStat(stat));
+			}
+			for (SizeType treeSize = 0; treeSize < ArrTestSizesCount; treeSize++)
+			{
+				CurrentTreeType = treeType;
+				CurrentTreeSize = treeSize;
+
+				if (stat != StatTravelMax && stat != StatTravelDepth)
+					logTableDouble(highTenthStat(stat));
 			}
 			logTable("\n");
 			if (treeType + 1 < TreeCount)
