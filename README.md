@@ -182,7 +182,7 @@ Cache flushing is done before every timed operation to ensure that as little of 
 Every combination of tree type and treesize is tested multiple times to reduce noise. On the lower tree sizes the repetition count is higher than on larger tree sizes. The numbers are chosen to balance noise and execution time.
 
 ## The function
-The test function can be abreviated like so:
+The test function can be abbreviated like so:
 ```
 void test()
 {
