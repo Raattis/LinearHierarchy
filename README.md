@@ -4,21 +4,21 @@ The tree types are
 * Left-child right-sibling binary tree
  * (https://en.wikipedia.org/wiki/Left_child_right_sibling)
 * Child array tree
- * naive and intuitive
+ * Naive and intuitive
 * Flat array tree
- * new
+ * Proposed
 
 The test executes following operations on every tree type.
-* add node
-* traverse from root to a random leaf
-* find maximum depth of the tree
-* read every node of the tree in depth search order
-* move subtree to a different parent node
-* delete subtree
+* Add node
+* Traverse from root to a random leaf
+* Find maximum depth of the tree
+* Read every node of the tree in depth search order
+* Move subtree to a different parent node
+* Delete subtree
 
 Additionally the following operations are executed only on the pointer based trees. Flat array is excluded from these tests as they are just simple look-up operations on it.
-* count nodes
-* travel to the tree's Nth node in depth search order
+* Count nodes
+* Travel to the tree's Nth node in depth search order
 
 The tests are run using multiple different tree sizes ranging from 10 nodes to 25,000 nodes. Every test is repeated several times as to mitigate random variance caused by the testing environment.
 
@@ -27,7 +27,7 @@ Tests are timed one operation at a time to ensure that CPU cache is in a clean s
 # Data structures
 
 ## Left-child right-sibling binary tree
-This tree unlike its name suggests isn't really a binary tree as its nodes can have an unlimited number of child nodes. It is a minimal data structure whose node consists of one child and one sibling pointer.
+While this tree is structurally a binary tree it can be interpreted in a way that enables any node to have an unlimited number of child nodes. Its node data structure consists of one child and one sibling pointer.
 
 ```
 struct Node
