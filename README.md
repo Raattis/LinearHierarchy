@@ -230,3 +230,6 @@ void test()
     }
 }
 ```
+
+# Results
+The results are output into a CSV file which can be turned into charts with the included python script (requires Python 3 and PyGame library).
