@@ -192,9 +192,9 @@ void test()
         
         for (tree size count)
         {
-            Tree tree;
             for (test repetition count for current size)
             {
+                Tree tree;
                 while(tree's node count < tree size)
                     add_node(tree);
                 
