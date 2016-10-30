@@ -174,7 +174,7 @@ This topology was chosen as it roughly resembles real world tree structures. It 
 The test data is checksummed in every stage of testing for every tree. This is done to ensure that every tree type is doing the same work and arriving at the same results.
 
 ## Timing
-The timing is done using Window's QueryPerformanceCounter. It's maximum precision on the test machine is 0.3198 µs. Due to this the results on the lower tree sizes tend to cluster on the multiples of this number. To combat this the tests are run an excessive number of times to achieve as noise free results as possible, but due to cache flushing done before every test this is very time consuming.
+The timing is done using Windows's QueryPerformanceCounter. It's maximum precision on the test machine is 0.3198 µs. Due to this the results on the lower tree sizes tend to cluster on the multiples of this number. To combat this the tests are run an excessive number of times to achieve as noise free results as possible, but due to cache flushing done before every test this is very time consuming.
 
 A full run of the tests takes over 7 hours on an Intel i7 5820k processor.
 
