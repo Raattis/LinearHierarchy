@@ -198,7 +198,9 @@ void test()
                 while(tree's node count < tree size)
                     add_node(tree);
                 
-                // N is just an arbitary number. The size of the tree is used for this in the tests, but it doesn't have to be
+                // N is just an arbitary number.
+                // The size of the tree is used in the tests, but it doesn't have to be.
+                int N = tree size;
                 for (N)
                     travel_to_random_leaf(tree);
                 
@@ -206,7 +208,7 @@ void test()
                     find_node(tree, get_node(tree, i));
                 
                 for (N / 10)
-                    find_max_depth_and_count(tree);
+                    find_count_and_max_depth(tree);
                 
                 for (20)
                     // The content of the test trees' nodes is a transform struct resembling a matrix
