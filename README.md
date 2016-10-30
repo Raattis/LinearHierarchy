@@ -210,9 +210,10 @@ void test()
                 for (N / 10)
                     find_count_and_max_depth(tree);
                 
+                // The payload of the tree's nodes is a transform struct resembling a matrix
+                // In this test the whole tree is traversed and the transforms are multiplied
+                // from parent to child.
                 for (20)
-                    // The content of the test trees' nodes is a transform struct resembling a matrix
-                    // In this test the whole tree is traversed and the matrices are multiplied from parent to children
                     do_transform_multiplication(tree);
                 
                 for (N / 10)
