@@ -133,8 +133,13 @@ Operations that benefit from having a cache table include
 * finding any one of the node's ancestors in a single step
  * cache type: deep parent cache, depth * count, 2D array
 
+## Caching and pooling
+The test includes two versions of every tree structure. A "naive" version and one with node pooling or other form of caching.
 
-# Test tree topology
+The left-child right-sibling binary tree and child array tree use pooling to improve their cache performance. Flat tree uses different types of pre-cached values for some tests, such as next-sibling cache for travel to leaf test and last-descendant cache moving subtrees.
+
+# Testing
+## Tree topology
 
 The topology of the tree that is created on every test execution is deterministic and always the same.
 
@@ -164,8 +169,6 @@ The tree's topology can be described recursively as follows:
 Although the tree's topology is deterministic the ordering of child nodes is randomized. This varies the shape of the tree somewhat. Both the topology and the shape of the built tree is identical for every tested tree structure type to ensure fair evaluation.
 
 This topology was chosen as it roughly resembles real world tree structures. It is complicated enough to make branch prediction difficulty and automatic compiler optimizations impossible, while still being simple to construct iteratively.
-
-# Test execution
 
 ## Validity
 The test data is checksummed in every stage of testing for every tree. This is done to ensure that every tree type is doing the same work and arriving at the same results.
