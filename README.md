@@ -198,7 +198,7 @@ void test()
                 while(tree's node count < tree size)
                     add_node(tree);
                 
-                // N is just an arbitary number.
+                // N is just an arbitrary number.
                 // The size of the tree is used in the tests, but it doesn't have to be.
                 int N = tree size;
                 for (N)
