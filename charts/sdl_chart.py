@@ -40,7 +40,7 @@ def make_chart(surface, name, headers, series_names, series, min_series = None, 
             max_series = temp_max
     
     maxValue = 0
-    if min_series != None and max_series != None:
+    if min_series != None and max_series != None and do_min_max:
         for row in range(0, len(max_series)):
             if series_names[row] in ignore_from_max or series_names[row] in ignore_series:
                 continue
@@ -152,7 +152,7 @@ def make_chart(surface, name, headers, series_names, series, min_series = None, 
         pygame.draw.aalines(surface, (0,0,0), False, (topleft, bottomleft, bottomright), 1)
 
     # min to max lines
-    if min_series != None and max_series != None:
+    if min_series != None and max_series != None and do_min_max:
         for j in range(0, len(min_series)):
             if(series_names[j] in ignore_series):
                 continue
@@ -205,9 +205,13 @@ def make_chart(surface, name, headers, series_names, series, min_series = None, 
         surface.blit(text, (resolution[0] * 0.5 - text.get_width() * 0.5, 5))
 
     # legend
+    legend_row = 0
     for i in range(0, len(series_names)):
+        if series_names[i] in ignore_series:
+            continue
         x = chart_margins.right + 40.0
-        y = chart_margins.centery - 15.0 * len(series_names) + 30.0 * i
+        y = chart_margins.centery - 15.0 * len(series_names) + 30.0 * legend_row
+        legend_row += 1
         text = legend_font.render(series_names[i], True, (10,10,10))
         surface.blit(text, (x,y - text.get_height() * 0.5))
         pygame.draw.line(surface, colors[series_names[i]], (x - 25, y), (x - 5, y), 3)
@@ -252,7 +256,7 @@ def make_point(image_name, color):
     return surface
 
 def main():
-    global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols, name_prefix, ignore_series, ignore_from_max, do_normalize
+    global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols, name_prefix, ignore_series, ignore_from_max, do_normalize, do_min_max
     
     resolution = (1440,1080)
     left_margin = 100
@@ -276,8 +280,8 @@ def main():
     colors["Flat cold"] = (20,100,220)
     colors["Pooled Pointer"] = (180,20,10)
     colors["Naive Pointer"] = (250,120,120)
-    colors["Pooled Multiway"] = (130,10,150)
-    colors["Naive Multiway"] = (250,20,250)
+    colors["Pooled Multiway"] = (250,20,250)
+    colors["Naive Multiway"] = (130,10,150)
     
     symbols = {}
     symbols["Flat"] = make_point("triangle", colors["Flat"])
@@ -317,7 +321,7 @@ def main():
         data_series_headers = table[i + 0][2:]
         data_column_count = len(data_series_headers)
 
-        print(data_series_headers)
+        #print(data_series_headers)
         
         data_series_names = []
         data_series = []
@@ -337,10 +341,10 @@ def main():
             # Get max values from columns after min values
             max_data_series.append(table[row][2+2*data_column_count:2+3*data_column_count])
         
-        print("DATAAA", data_series)
-        print("MIIIIN", min_data_series)
-        print("MAAAAX", max_data_series)
-        print("HEEAAD", data_series_headers)
+        #print("DATAAA", data_series)
+        #print("MIIIIN", min_data_series)
+        #print("MAAAAX", max_data_series)
+        #print("HEEAAD", data_series_headers)
         parse_floats(data_series)
         parse_floats(min_data_series)
         parse_floats(max_data_series)
@@ -349,66 +353,10 @@ def main():
         ignore_series = []
         ignore_from_max = []
         do_normalize = False
+        do_min_max = True
         
-        if chart_name == "Add" or chart_name == "Move" or chart_name == "Erase":
-            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-            ignore_from_max.append("Flat cold")
-            ignore_from_max.append("Naive Multiway")
-            ignore_from_max.append("Pooled Multiway")
-            
-            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-            ignore_from_max.append("Flat")
-            ignore_from_max.append("Flat cached")
-            
-            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-            
-            do_normalize = True
-            make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-            
-        elif chart_name == "Leaf travel":
-
-            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-            ignore_from_max.append("Flat cold")
-            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series)
-            
-            ignore_from_max.append("Flat")
-            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series)
-            
-            do_normalize = True
-            make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series)
-
-        elif chart_name == "Find max depth":
-
-            # ignore flat cached and flat cold
-            ignore_series.append("Flat cached")
-            ignore_series.append("Flat cold")
-            make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-            do_normalize = True
-            make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-            do_normalize = False
-            ignore_series.append("Pooled Pointer")
-            ignore_series.append("Naive Pointer")
-            ignore_series.append("Pooled Multiway")
-            ignore_series.append("Naive Multiway")
-            make_chart(screen, chart_name + ", flat only", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-            
-        elif chart_name == "Find count":
-            ignore_series.append("Flat cached")
-            ignore_series.append("Flat cold")
-            make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-            do_normalize = True
-            make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
-
-        elif chart_name == "Nth Node":
-            ignore_series.append("Flat")
-            ignore_series.append("Flat cached")
-            ignore_series.append("Flat cold")
+        if chart_name == "Nth Node":
+            ignore_series = ["Flat", "Flat cold", "Flat cold"]
             
             make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
 
@@ -416,31 +364,80 @@ def main():
             make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             
         elif "Find node" == chart_name:
-            ignore_series.append("Flat cached")
-            ignore_series.append("Flat cold")
+            do_min_max = False
+            ignore_series = ["Flat cached", "Flat cold"]
+            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             
-            make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            do_min_max = True
             
-            ignore_from_max.append("Pooled Pointer")
-            ignore_from_max.append("Naive Pointer")
-            ignore_from_max.append("Pooled Multiway")
-            ignore_from_max.append("Naive Multiway")
-            
-            make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
 
             do_normalize = True
             make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            do_normalize = False
             
         elif "Transform" in chart_name:
-            ignore_series.append("Flat cached")
-            ignore_series.append("Flat cold")
+            ignore_series = ["Flat cached", "Flat cold"]
             make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
 
             do_normalize = True
             make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             
+        elif "Find max depth" in chart_name:
+            ignore_series = ["Flat cached", "Flat cold"]
+            make_chart(screen, chart_name + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+
+            do_normalize = True
+            make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            do_normalize = False
+            
+            ignore_from_max = ["Naive Pointer", "Pooled Pointer", "Naive Multiway", "Pooled Multiway"]
+            make_chart(screen, chart_name + " zoomed to flat", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
         else:
+            do_min_max = False
+            ignore_from_max = ["Flat cold"]
+            if chart_name == "Leaf travel":
+                ignore_from_max = ["Flat cold", "Flat"]
+            
             make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            ignore_series = ["Flat", "Flat cold", "Naive Multiway", "Naive Pointer"]
+
+            do_min_max = True
+            
+            make_chart(screen, chart_name, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+
+            ignore_from_max = ["Flat", "Flat cached", "Pooled Multiway"]
+            if chart_name == "Erase":
+                ignore_from_max = ["Pooled Multiway"]
+                
+            if chart_name != "Leaf travel":
+                make_chart(screen, chart_name + " zoomed", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            
+            do_normalize = True
+            make_chart(screen, chart_name + " normalized", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            do_normalize = False
+            
+            ignore_from_max = []
+            ignore_series = ["Flat", "Flat cold", "Naive Multiway", "Pooled Multiway"]
+            
+            make_chart(screen, chart_name + ", for pointer trees", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+
+            ignore_series = ["Flat", "Flat cold", "Naive Pointer", "Pooled Pointer"]
+            
+            make_chart(screen, chart_name + ", for multiway trees", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+
+            if chart_name == "Find count":
+                continue
+            
+            ignore_series = ["Naive Pointer", "Pooled Pointer", "Naive Multiway", "Pooled Multiway"]
+            make_chart(screen, chart_name + ", for flat trees", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            
+            if chart_name == "Erase":
+                continue
+            
+            ignore_from_max = ["Flat cold"]
+            make_chart(screen, chart_name + ", for flat trees", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            
 
 
 try:
