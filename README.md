@@ -176,7 +176,7 @@ The test data is checksummed in every stage of testing for every tree. This is d
 ## Timing
 The timing is done using Windows's QueryPerformanceCounter. It's maximum precision on the test machine is 0.3198 µs. Due to this the results on the lower tree sizes tend to cluster on the multiples of this number. To combat this the tests are run an excessive number of times to achieve as noise free results as possible, but due to cache flushing done before every test this is very time consuming.
 
-A full run of the tests takes over 7 hours on an Intel i7 5820k processor.
+A full run of the tests takes over 7 hours on an Intel i7-5820k processor.
 
 ## Cache flushing
 Cache flushing is done before every timed operation to ensure that as little of the test data is prefetched to CPU's cache. The cache flushing is achieved via brute force means by pumping several megabytes of heap memory through the CPU in unpredictable order. Unfortunately this takes wastly more time than the actual tests.
