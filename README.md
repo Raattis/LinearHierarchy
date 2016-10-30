@@ -164,3 +164,63 @@ The tree's topology can be described recursively as follows:
 Although the tree's topology is deterministic the ordering of child nodes is randomized. This varies the shape of the tree somewhat. Both the topology and the shape of the built tree is identical for every tested tree structure type to ensure fair evaluation.
 
 This topology was chosen as it roughly resembles real world tree structures. It is complicated enough to make branch prediction difficulty and automatic compiler optimizations impossible, while still being simple to construct iteratively.
+
+# Test execution
+
+## Validity
+The test data is checksummed in every stage of testing for every tree. This is done to ensure that every tree type is doing the same work and arriving at the same results.
+
+## Timing
+The timing is done using Window's QueryPerformanceCounter. It's maximum precision on the test machine is 0.3198 µs. Due to this the results on the lower tree sizes tend to cluster on the multiples of this number. To combat this the tests are run an excessive number of times to achieve as noise free results as possible, but due to cache flushing done before every test this is very time consuming.
+
+A full run of the tests takes over 7 hours on an Intel i7 5820k processor.
+
+## Cache flushing
+Cache flushing is done before every timed operation to ensure that as little of the test data is prefetched to CPU's cache. The cache flushing is achieved via brute force means by pumping several megabytes of heap memory through the CPU in unpredictable order. Unfortunately this takes wastly more time than the actual tests.
+
+## Repetitions
+Every combination of tree type and treesize is tested multiple times to reduce noise. On the lower tree sizes the repetition count is higher than on larger tree sizes. The numbers are chosen to balance noise and execution time.
+
+## The function
+The test function can be abreviated like so:
+```
+void test()
+{
+    for (tree type count)
+    {
+        initialize_random();
+        
+        for (tree size count)
+        {
+            Tree tree;
+            for (test repetition count for current size)
+            {
+                while(tree's node count < tree size)
+                    add_node(tree);
+                
+                // N is just an arbitary number. The size of the tree is used for this in the tests, but it doesn't have to be
+                for (N)
+                    travel_to_random_leaf(tree);
+                
+                for (i = 0 .. N)
+                    find_node(tree, get_node(tree, i));
+                
+                for (N / 10)
+                    find_max_depth_and_count(tree);
+                
+                for (20)
+                    // The content of the test trees' nodes is a transform struct resembling a matrix
+                    // In this test the whole tree is traversed and the matrices are multiplied from parent to children
+                    do_transform_multiplication(tree);
+                
+                for (N / 10)
+                    // Moves a subtree starting from one node to a new parent
+                    move_node(tree, get_node(random()), get_node(random()));
+                
+                while (tree's node count > 0.8 * tree size)
+                    erase_node(tree, get_node(random()));
+            }
+        }
+    }
+}
+```
