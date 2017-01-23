@@ -20,16 +20,12 @@ struct RivalTreeNodeBase
 		RivalTreeNodeBase* parent;
 		RivalTreeNodeBase* nextUnusedNode; // When node is unused, this will point to next unused node in linked list fashion.
 	};
-	RivalTreeNodeBase* leftSibling;
-	RivalTreeNodeBase* rightSibling;
-
+	
 	RivalTreeNodeBase* clear(RivalTreeNodeBase* currentUnusedNode)
 	{
 		FLAT_ASSERT(++recursionCounter < 1024);
 
 		parent = NULL;
-		leftSibling = NULL;
-		rightSibling = NULL;
 		for (SizeType i = 0; i < children.getSize(); i++)
 		{
 			FLAT_ASSERT(children[i]->parent = this);
@@ -53,21 +49,13 @@ struct RivalTreeNode : public RivalTreeNodeBase
 		: value()
 	{
 		parent = NULL;
-		leftSibling = NULL;
-		rightSibling = NULL;
 	}
 
 	void sanityCheck()
 	{
-		FLAT_ASSERT(!rightSibling || rightSibling->leftSibling == this);
-		FLAT_ASSERT(!leftSibling || leftSibling->rightSibling == this);
-
 		for (SizeType i = 0; i < children.getSize(); i++)
 		{
 			FLAT_ASSERT(children[i]->parent == this);
-
-			FLAT_ASSERTF(i <= 0 || children[i - 1]->rightSibling == children[i], "This: %s,  Left: %s", toString(children[i]).ptr, toString(children[i - 1]).ptr);
-			FLAT_ASSERTF(i + 1 >= children.getSize() || children[i + 1]->leftSibling == children[i], "This: %s, Right: %s", toString(children[i]).ptr, toString(children[i + 1]).ptr);
 
 			((RivalTreeNode<ValueType>*)children[i])->sanityCheck();
 		}
@@ -88,11 +76,6 @@ struct RivalTreeNode : public RivalTreeNodeBase
 		if (!this)
 			return String("NULL", 4);
 		String result(getValue());
-		result += " (L: ";
-		result += ((const RivalTreeNode<ValueType>*)leftSibling)->getValue();
-		result += ", R: ";
-		result += ((const RivalTreeNode<ValueType>*)rightSibling)->getValue();
-		result += ")";
 		return result;
 	}
 
@@ -126,16 +109,6 @@ void disconnectFromParentAndSiblings(RivalTreeNodeBase* node)
 		}
 		node->parent = NULL;
 	}
-	if (node->leftSibling)
-	{
-		node->leftSibling->rightSibling = node->rightSibling;
-	}
-	if (node->rightSibling)
-	{
-		node->rightSibling->leftSibling = node->leftSibling;
-		node->rightSibling = NULL;
-	}
-	node->leftSibling = NULL;
 }
 
 bool isChildOf(RivalTreeNodeBase* child, RivalTreeNodeBase* parent)
@@ -172,15 +145,6 @@ void connectToParent(RivalTreeNodeBase* node, RivalTreeNodeBase* parent)
 			{
 				if (Sorter::isFirst(((Node*)node)->value, ((Node*)children[i])->value))
 				{
-					if (i > 0)
-					{
-						left = children[i - 1];
-						left->rightSibling = node;
-					}
-
-					right = children[i];
-					right->leftSibling = node;
-
 					children.insert(i, node);
 
 					inserted = true;
@@ -190,31 +154,16 @@ void connectToParent(RivalTreeNodeBase* node, RivalTreeNodeBase* parent)
 
 			if (!inserted)
 			{
-				if (children.getSize() > 0)
-				{
-					left = children.getBack();
-					left->rightSibling = node;
-				}
-
 				children.pushBack(node);
 			}
 		}
 		else
 		{
-			if (children.getSize() > 0)
-			{
-				left = children[0];
-				left->rightSibling = node;
-			}
 			children.insert(0, node);
 		}
 	}
 
 	node->parent = parent;
-	node->leftSibling = left;
-	node->rightSibling = right;
-	FLAT_ASSERT(!left || left->rightSibling == node);
-	FLAT_ASSERT(!right || right->leftSibling == node);
 }
 
 template<typename Sorter, typename Node>

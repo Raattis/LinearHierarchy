@@ -773,7 +773,10 @@ void testTree()
 				}
 			}
 
-			for (SizeType targetNode = 1; targetNode < TestNodeCount; targetNode++)
+			const SizeType IndividualTestRepeatCount = 1000;
+			const SizeType MoveTestRepeatCount = (IndividualTestRepeatCount > TestNodeCount ? TestNodeCount : IndividualTestRepeatCount) / 10;
+
+			for (SizeType targetNode = 1; targetNode < IndividualTestRepeatCount; targetNode++)
 			{
 				test_travelToLeaf(t, nodeCount, targetNode);
 			}
@@ -781,16 +784,16 @@ void testTree()
 			{
 				test_findNode(t, nodeCount, targetNode);
 			}
-			for (SizeType doFind = 0; doFind < TestNodeCount * 0.1; doFind++)
+			for (SizeType doFind = 0; doFind < IndividualTestRepeatCount; doFind++)
 			{
 				test_findDepthAndCount(t, nodeCount);
 			}
-			for (SizeType i = 0; i < 20; i++)
+			for (SizeType i = 0; i < IndividualTestRepeatCount; i++)
 			{
 				test_multiplyTransforms(t, nodeCount, 3);
 			}
 
-			for (SizeType doMoves = 0; doMoves < TestNodeCount * 0.1 || doMoves < 2; doMoves++)
+			for (SizeType doMoves = 0; doMoves < MoveTestRepeatCount || doMoves < 2; doMoves++)
 			{
 				SizeType parent = Random::get(1, nodeCount - 2);
 				SizeType child = Random::get(parent + 2, nodeCount);
@@ -1011,6 +1014,10 @@ void test_findNode(const FlatHierarchy<Transform, TransformSorter>& tree, SizeTy
 		}
 	}
 	FLAT_ASSERT(found);
+	if (!found)
+	{
+		printf("test_findNode for flat tree failed\n");
+	}
 }
 
 void test_findDepthAndCount(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount)
@@ -1467,7 +1474,7 @@ void test_findNode(const Tree& tree, SizeType nodeCount, SizeType targetNode)
 	}
 	if (!found)
 	{
-		printf("Error lol!");
+		printf("test_findNode failed\n");
 	}
 	FLAT_ASSERT(found);
 }
@@ -1557,11 +1564,14 @@ void test_multiplyTransforms(const Tree& tree, SizeType nodeCount, const SizeTyp
 
 	for (SizeType iteration = 1; iteration + 1 < TransformIterations; ++iteration)
 	{
+		resultTransforms.clear();
 		LOLMBDA::recurse(tree.root, Transform(), resultTransforms);
 	}
 
 	{
 		// Only log first and last iterations
+
+		resultTransforms.clear();
 
 		ScopedProfiler prof(getStat(StatTransformIt10), true);
 		LOLMBDA::recurse(tree.root, Transform(), resultTransforms);
