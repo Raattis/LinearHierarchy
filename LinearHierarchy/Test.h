@@ -721,8 +721,8 @@ void testTree()
 #ifdef _DEBUG
 		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
 #else
-		//const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
-		const SizeType TestRepeatCount = 2;
+		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex] > 10 ? 10 : ArrTestRoundNumbers[arrSizeIndex];
+		//const SizeType TestRepeatCount = 2;
 #endif
 
 		printf("\nTest size: %d\n", TestNodeCount);
@@ -1755,7 +1755,8 @@ void test()
 		}
 
 		// Cold cache
-		if ((TestMask & Flat3) != 0 || (TestMask & Every) != 0)
+		if (false)
+		//if ((TestMask & Flat3) != 0 || (TestMask & Every) != 0)
 		{
 			CurrentTreeType = 2;
 
