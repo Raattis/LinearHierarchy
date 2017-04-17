@@ -95,7 +95,7 @@ void shuffleMemory()
 		mem[i + 30 * p] = mem[i + 25 * p];
 	}
 
-	// Long stretch of doing fever jumps in memory but handling that much larger chunk of it
+	// Long stretch of doing fewer jumps in memory but handling that much larger chunk of it
 	for (i = 0; i < p; i++)
 	{
 		mem[i + 0 * p] = mem[i + 3 * p];

@@ -377,6 +377,19 @@ namespace // Result storage
 		sort(statNumber);
 		return arr[arr.getSize() / 2];
 	}
+	double mid80Stat(StatNumber statNumber)
+	{
+		FLAT_ASSERT(statNumber < StatMax);
+		FLAT_VECTOR<double>& arr = allStats[CurrentTreeType][CurrentTreeSize][statNumber];
+		double sum = 0;
+		SizeType start = arr.getSize() / 10;
+		SizeType count = arr.getSize() - start * 2;
+		for (SizeType i = start; i < start + count; i++)
+		{
+			sum += arr[i];
+		}
+		return count == 0 ? 0.0 : sum / count;
+	}
 	double lowTenthStat(StatNumber statNumber)
 	{
 		FLAT_ASSERT(statNumber < StatMax);
@@ -708,7 +721,8 @@ void testTree()
 #ifdef _DEBUG
 		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
 #else
-		const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
+		//const SizeType TestRepeatCount = ArrTestRoundNumbers[arrSizeIndex];
+		const SizeType TestRepeatCount = 2;
 #endif
 
 		printf("\nTest size: %d\n", TestNodeCount);
@@ -1805,11 +1819,11 @@ void test()
 		logTable("Max Travel Depth\t");
 		logTable("Average Travel Depth\n\t");
 		logTableDouble(maxStat(StatCountMax));
-		logTableDouble(medianStat(StatCountAvg));
+		logTableDouble(mid80Stat(StatCountAvg));
 		logTableDouble(maxStat(StatDepthMax));
 		logTableDouble(maxStat(StatDepthAvg));
 		logTableDouble(maxStat(StatTravelDepth));
-		logTableDouble(medianStat(StatTravelDepth));
+		logTableDouble(mid80Stat(StatTravelDepth));
 		logTable("\n");
 	}
 
@@ -1859,7 +1873,7 @@ void test()
 				if(stat == StatTravelMax)
 					logTableInt((uint32_t)maxStat(stat));
 				else
-					logTableDouble(medianStat(stat));
+					logTableDouble(mid80Stat(stat));
 			}
 			for (SizeType treeSize = 0; treeSize < ArrTestSizesCount; treeSize++)
 			{
@@ -1899,7 +1913,7 @@ void test()
 	{
 		FILE* f = NULL;
 		errno_t err = fopen_s(&f, "output.csv", "w");
-		if (err >= 0)
+		if (err >= 0 && f)
 		{
 			fprintf(f, "%s", LogBuffer);
 			fclose(f);

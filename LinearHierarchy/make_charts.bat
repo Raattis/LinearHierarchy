@@ -1,0 +1,1 @@
+R:\Win\Python32\python.exe ..\charts\sdl_chart.py
