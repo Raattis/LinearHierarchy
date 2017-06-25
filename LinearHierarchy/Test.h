@@ -764,7 +764,8 @@ void testTree()
 				};
 
 				SizeType childCount = 2;
-				while (nodeCount < TestNodeCount)
+				SizeType NodesAddedToTheEnd = SizeType(TestNodeCount * 0.7);
+				while (nodeCount < NodesAddedToTheEnd)
 				{
 					SizeType nodeIndex = test_addChild(t, nodeCount, 0);
 					nodeCount += 1;
@@ -779,9 +780,9 @@ void testTree()
 						test_setHash(t);
 					}
 
-					if(nodeCount < TestNodeCount)
+					if(nodeCount < NodesAddedToTheEnd)
 					{
-						LOLMBDA::add(t, nodeIndex, childCount, nodeCount, TestNodeCount);
+						LOLMBDA::add(t, nodeIndex, childCount, nodeCount, NodesAddedToTheEnd);
 						childCount += 1;
 					}
 				}
@@ -789,6 +790,23 @@ void testTree()
 
 			const SizeType IndividualTestRepeatCount = 1000;
 			const SizeType MoveTestRepeatCount = (IndividualTestRepeatCount > TestNodeCount ? TestNodeCount : IndividualTestRepeatCount) / 10;
+
+			while(nodeCount < TestNodeCount)
+			{
+				SizeType parent = Random::get(0, SizeType(nodeCount * 0.7));
+				test_addChild(t, nodeCount, parent);
+				nodeCount += 1;
+
+				if (VerbosePrinting)
+				{
+					test_print(t);
+				}
+
+				if (CheckHashes)
+				{
+					test_setHash(t);
+				}
+			}
 
 			for (SizeType targetNode = 1; targetNode < IndividualTestRepeatCount; targetNode++)
 			{
@@ -818,7 +836,12 @@ void testTree()
 					test_setHash(t);
 				}
 			}
- 
+
+			for (SizeType i = 0; i < 1000; i++)
+			{
+				test_nthNode(t, i * nodeCount / 1000);
+			}
+
 			while (nodeCount > TestNodeCount * 0.8 && nodeCount > 2)
 			{
 				SizeType child = Random::get(1, nodeCount);
@@ -1054,6 +1077,24 @@ void test_findDepthAndCount(const FlatHierarchy<Transform, TransformSorter>& tre
 
 	maxStat(StatCountMax, count);
 	maxStat(StatDepthMax, depth);
+}
+
+void test_nthNode(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType index)
+{
+	if (!FLAT_NO_CACHE_CONDITION) // No cached versions needed
+		return;
+
+	FLAT_ASSERT(index < tree.getCount());
+	Transform* t;
+	{
+		ScopedProfiler prof(getStat(StatNthNode));
+		t = &tree.values[index];
+	}
+
+	if (t->pos.x < -99999.0f)
+	{
+		printf("test_nthNode failed\n");
+	}
 }
 
 void test_multiplyTransforms(const FlatHierarchy<Transform, TransformSorter>& tree, SizeType nodeCount, const SizeType TransformIterations)
@@ -1549,6 +1590,21 @@ void test_findDepthAndCount(const Tree& tree, SizeType nodeCount)
 }
 
 template<typename Tree>
+void test_nthNode(const Tree& tree, SizeType index)
+{
+	Transform* t;
+	{
+		ScopedProfiler prof(getStat(StatNthNode));
+		t = &((Tree::Node*)getNthNode(tree.root, index))->value;
+	}
+
+	if (t->pos.x < -99999.0f)
+	{
+		printf("test_nthNode failed\n");
+	}
+}
+
+template<typename Tree>
 void test_multiplyTransforms(const Tree& tree, SizeType nodeCount, const SizeType TransformIterations)
 {
 	struct LOLMBDA
@@ -1956,5 +2012,52 @@ void test()
 
 	printf("\nTest completed in %.2lf seconds.\n\n", wholeTestProfiler.stop() / 1000000.0);
 
+	system("pause");
+}
+
+void array_test()
+{
+	static const SizeType tree_size = 500000;
+	static const SizeType test_count = 10000;
+	static const SizeType rep_count = 20;
+	double avg = 0;
+	FlatHierarchy<Transform> asdfasdf;
+	asdfasdf.values.reserve(tree_size);
+	asdfasdf.depths.reserve(tree_size);
+
+	Random::init(13337);
+
+	for (SizeType reps = 0; reps < rep_count; reps++)
+	{
+		asdfasdf.values.clear();
+		asdfasdf.depths.clear();
+
+		SizeType a = 1 + Random::get(0, 1);
+		SizeType b = 1 + tree_size / 2 + Random::get(0, 1);
+		SizeType a_count = tree_size / 10 + Random::get(0, 1);
+		SizeType b_count = tree_size / 3 + Random::get(0, 1);
+		for (SizeType i = 0; i < tree_size; i++)
+		{
+			asdfasdf.values.pushBack(Transform(i, i + 1, i + 2, i + 1.4f)); // char('0' + i)); 
+			asdfasdf.depths.pushBack(0 == a ? 0 : (i == a || i == 1 + tree_size / 2) ? 1 : 2);
+		}
+
+		//printf("%.10s\n", asdfasdf.values.getPointer());
+
+		ScopedProfiler prof;
+		for (SizeType i = 0; i < test_count; i++)
+		{
+			SizeType a = Random::get(0, tree_size);
+			SizeType b = Random::get(0, tree_size);
+			SizeType count = Random::get(0, a > b ? tree_size - a : tree_size - b);
+			asdfasdf.move(a, b, count);
+			//printf("%.10s\n", asdfasdf.values.getPointer());
+		}
+		double result = prof.stop();
+		printf("t: %f; ", result / test_count);
+		avg += result;
+		printf("hash: %x\n", SuperFastHash((char*)asdfasdf.values.getPointer(), sizeof(Transform) * asdfasdf.values.getSize()));
+	}
+	printf("avg: %f\n", avg / rep_count / test_count);
 	system("pause");
 }

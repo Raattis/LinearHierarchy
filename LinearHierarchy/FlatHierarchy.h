@@ -28,8 +28,6 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 //------------------------------------------------------------------
 
-
-
 #if FLAT_ASSERTS_ENABLED == true
 	
 	#ifdef _WIN32
@@ -867,56 +865,68 @@ public:
 		depths.resize(depths.getSize() - count);
 		values.resize(values.getSize() - count);
 	}
-
 	void move(SizeType source, SizeType dest, SizeType count)
 	{
-		static const SizeType MaxStackCount = 1024 / sizeof(ValueType);
-		if (count <= MaxStackCount)
-		{
-			// Get buffers for values
-			DepthValue   stackDepthBuffer[MaxStackCount];
-			ValueType stackValueBuffer[MaxStackCount];
-			moveImp(source, dest, count, stackDepthBuffer, stackValueBuffer);
-		}
-		else
-		{
-			DepthValue* depthBuffer = (DepthValue*)malloc((sizeof(DepthValue) + sizeof(ValueType)) * count);
-			ValueType* valueBuffer = (ValueType*)(depthBuffer + count);
-			moveImp(source, dest, count, depthBuffer, valueBuffer);
-			free(depthBuffer);
-		}
-	}
+#if 1
+		SizeType low = source < dest ? source : dest;
+		SizeType mid = source < dest ? source + count : source;
+		SizeType high = source < dest ? dest + count : source + count;
 
+		bool low_small = mid - low < high - mid;
+		SizeType small_start = low_small ? low              : mid;
+		SizeType small_count = low_small ? mid - low        : high - mid;
+		SizeType small_dest  = low_small ? low + high - mid : low;
+		SizeType large_start = low_small ? mid              : low;
+		SizeType large_count = low_small ? high - mid       : mid - low;
+		SizeType large_dest  = low_small ? low              : low + high - mid;
+
+		static const SizeType static_buffer_size = 1024;
+		char stack_buffer[static_buffer_size];
+		char* temp_buffer = stack_buffer;
+		if (small_count * sizeof(ValueType) > static_buffer_size)
+			temp_buffer = (char*)malloc(small_count * sizeof(ValueType));
+
+		//printf("memcpy(X, %d, %d); ", small_start, small_count);
+		//printf("memmove(%d, %d, %d); ", large_dest, large_start, large_count);
+		//printf("memcpy(%d, X, %d);\n", small_dest, small_count);
+
+		FLAT_MEMCPY (temp_buffer                     , depths.getPointer() + small_start, small_count);
+		FLAT_MEMMOVE(depths.getPointer() + large_dest, depths.getPointer() + large_start, large_count);
+		FLAT_MEMCPY (depths.getPointer() + small_dest, temp_buffer                      , small_count);
+		
+		FLAT_MEMCPY (temp_buffer                     , values.getPointer() + small_start, small_count);
+		FLAT_MEMMOVE(values.getPointer() + large_dest, values.getPointer() + large_start, large_count);
+		FLAT_MEMCPY (values.getPointer() + small_dest, temp_buffer                      , small_count);
+
+		if (small_count * sizeof(ValueType) > static_buffer_size)
+			free(temp_buffer);
+#endif
+	}
 	inline void moveImp(SizeType source, SizeType dest, SizeType count, DepthValue* depthBuffer, ValueType* valueBuffer)
 	{
+		FLAT_ASSERT(source + count <= dest || dest + count < source);
+
 		DepthValue* dPtr = depths.getPointer();
 		ValueType* vPtr = values.getPointer();
 
 		// Push to buffer
-		FLAT_MEMCPY(depthBuffer, dPtr + source, count * sizeof(DepthValue));
-		FLAT_MEMCPY(valueBuffer, vPtr + source, count * sizeof(ValueType));
+		FLAT_MEMCPY(depthBuffer, dPtr + source, (count) * sizeof(DepthValue));
+		FLAT_MEMCPY(valueBuffer, vPtr + source, (count) * sizeof(ValueType));
 
-		// Shift buffer backward or forward depending on the order of source and destination
-		if (source < dest)
-		{
-			FLAT_ASSERT(source + count < dest);
-			const SizeType toMove = dest - (source + count);
+		const bool source_first = source < dest;
+		const SizeType moveFrom = source_first ? source + count : dest;
+		const SizeType moveTo   = source_first ? source         : dest + count;
+		const SizeType toMove   = source_first ? dest - source  : source - dest;
+		FLAT_MEMMOVE(dPtr + moveTo, dPtr + moveFrom, (toMove)* sizeof(DepthValue));
+		FLAT_MEMMOVE(vPtr + moveTo, vPtr + moveFrom, (toMove) * sizeof(ValueType));
 
-			FLAT_MEMMOVE(dPtr + source, dPtr + source + count, toMove * sizeof(DepthValue));
-			FLAT_MEMMOVE(vPtr + source, vPtr + source + count, toMove * sizeof(ValueType));
-			dest -= count;
-		}
-		else
-		{
-			FLAT_ASSERT(dest < source);
-			const SizeType toMove = source - dest;
+		FLAT_MEMCPY(dPtr + dest, depthBuffer, (count) * sizeof(DepthValue));
+		FLAT_MEMCPY(vPtr + dest, valueBuffer, (count) * sizeof(ValueType));
 
-			FLAT_MEMMOVE(dPtr + dest + count, dPtr + dest, toMove * sizeof(DepthValue));
-			FLAT_MEMMOVE(vPtr + dest + count, vPtr + dest, toMove * sizeof(ValueType));
-		}
 
-		FLAT_MEMCPY(dPtr + dest, depthBuffer, count * sizeof(DepthValue));
-		FLAT_MEMCPY(vPtr + dest, valueBuffer, count * sizeof(ValueType));
+		//printf("memcpy(X, %d, %d); ", source, count);
+		//printf("memmove(%d, %d, %d); ", moveTo, moveFrom, toMove);
+		//printf("memcpy(%d, X, %d);\n", dest, count);
 	}
 
 	inline bool linearIsChildOf(HierarchyIndex child, HierarchyIndex parent)

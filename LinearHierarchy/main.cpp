@@ -5,7 +5,7 @@
 
 int main()
 {
+	//array_test();
 	test();
-	
     return 0;
 }

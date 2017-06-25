@@ -113,11 +113,11 @@ def make_chart(surface, name, headers, series_names, series, min_series = None, 
 
         text = None
         if "normali" in name:
-            text = label_font.render("kesto solmua kohden (µs/solmu)", True, (10,10,10))
+            text = label_font.render("Kesto solmua kohden (µs/solmu)", True, (10,10,10))
         else:
-            text = label_font.render("kesto (µs)", True, (10,10,10))
+            text = label_font.render("Kesto (µs)", True, (10,10,10))
         text = pygame.transform.rotate(text, 90)
-        surface.blit(text, (7, chart_margins.centery - text.get_height() * 0.5))
+        surface.blit(text, (8, chart_margins.centery - text.get_height() * 0.5))
 
         for i in range(0, height_whisker_count):
             value = step_size * i
@@ -139,8 +139,8 @@ def make_chart(surface, name, headers, series_names, series, min_series = None, 
         top = chart_margins.bottom + offset
         left = chart_margins.left - offset
         
-        text = label_font.render("solmujen määrä", True, (10,10,10))
-        surface.blit(text, (chart_margins.centerx - text.get_width() * 0.5, resolution[1] - text.get_height() - 10))
+        text = label_font.render("Solmujen määrä", True, (10,10,10))
+        surface.blit(text, (chart_margins.centerx - text.get_width() * 0.5, chart_margins.bottom + 85))
 
         for i in range(0, len(headers)):
             x = left + distances[i] * chart_margins.width
@@ -214,19 +214,42 @@ def make_chart(surface, name, headers, series_names, series, min_series = None, 
 
     # legend
     if series_count > 1:
+        temp_surf = pygame.Surface((resolution[0] * 0.8, 75))
+        temp_surf.fill((255,255,255))
+        
+        max_w = 0
+        y = 0
+        current_width = 0
+        symbol_w = symbol.get_width() + 15
+        count = 0
+        
         legend_row = 0
         for i in range(0, len(series_names)):
             if series_names[i] in ignore_series:
                 continue
-            x = chart_margins.right + 40.0
-            y = chart_margins.centery - 15.0 * series_count + 30.0 * legend_row
-            legend_row += 1
             text = legend_font.render(names[series_names[i]], True, (10,10,10))
-            surface.blit(text, (x,y - text.get_height() * 0.5))
-            pygame.draw.line(surface, colors[series_names[i]], (x - 25, y), (x - 5, y), 3)
+            
+            count += 1
+            if (series_count == 5 and count == 3) or (series_count != 5 and count == 4):
+                y += symbol.get_height() + 20
+                current_width = 0
+            
+            x = current_width + symbol.get_width() + 15
+            temp_surf.blit(text, (x,y))
+            
+            symbol_x = current_width
+            symbol_y = y + text.get_height() / 2 - symbol.get_height() / 2
+            
+            current_width = x + text.get_width() + 40
+            
+            if current_width - 40 > max_w:
+                max_w = current_width
+            
+            #pygame.draw.line(temp_surf, colors[series_names[i]], (symbol_x, symbol_y + symbol.get_height() / 2), (symbol_x + symbol.get_width(), symbol_y + symbol.get_height() / 2), 3)
             
             symbol = symbols[series_names[i]]
-            surface.blit(symbol, (x - 15 - symbol.get_width() * 0.5, y - symbol.get_height() * 0.5))
+            temp_surf.blit(symbol, (symbol_x, symbol_y))
+        surface.blit(temp_surf, ((resolution[0] - max_w) / 2, resolution[1] - temp_surf.get_height()))
     else:
         temp_name = ""
         for s in series_names:
@@ -282,21 +305,21 @@ def make_point(image_name, color):
 def main():
     global resolution, chart_margins, legend_font, label_font, title_font, subtitle_font, colors, symbols, name_prefix, ignore_series, ignore_from_max, do_normalize, do_min_max, chart_name, names
     
-    resolution = (1440,1080)
-    left_margin = 100
-    top_margin = 100
-    right_margin = 280
-    bottom_margin = 100
+    resolution = (1080,1080)
+    left_margin = 130
+    top_margin = 80
+    right_margin = 40
+    bottom_margin = 200
     chart_margins = Rect(left_margin, top_margin, resolution[0] - left_margin - right_margin, resolution[1] - top_margin - bottom_margin )
 
     pygame.init()
     screen = pygame.display.set_mode(resolution)
     pygame.display.flip()
     
-    legend_font = pygame.font.SysFont("arial", 30)
-    label_font = pygame.font.SysFont("arial", 18)
-    title_font = pygame.font.SysFont("arial", 26)
-    subtitle_font = pygame.font.SysFont("arial", 18)
+    legend_font = pygame.font.SysFont("arial", 26)
+    label_font = pygame.font.SysFont("arial", 26)
+    title_font = pygame.font.SysFont("arial", 30)
+    subtitle_font = pygame.font.SysFont("arial", 26)
 
     colors = {}
     colors["Flat"] = (10,60,10)
@@ -317,12 +340,12 @@ def main():
     symbols["Naive Multiway"] = make_point("rectangle", colors["Naive Multiway"])
 
     names = {}
-    names["Flat"] = "litteä"
-    names["Flat cached"] = "litteä, avustettu"
+    names["Flat"] = "syvyystaulukko"
+    names["Flat cached"] = "syvyystaulukko, avustettu"
     names["Flat cold"] = "ei käytössä"
-    names["Pooled Pointer"] = "pointteri, pool"
-    names["Naive Pointer"] = "pointteri"
-    names["Pooled Multiway"] = "binääri, pool"
+    names["Pooled Pointer"] = "lapsitaulukko, varanto"
+    names["Naive Pointer"] = "lapsitaulukko"
+    names["Pooled Multiway"] = "binääri, varanto"
     names["Naive Multiway"] = "binääri"
     
     lines = None
@@ -391,7 +414,7 @@ def main():
         if chart_name == "Nth Node":
             ignore_series = ["Flat cached", "Flat cold"]
 
-            chart_title = "Solmun hakeminen järjestysnumeron perusteella"
+            chart_title = "Solmun hakeminen järjestysluvulla"
             
             make_chart(screen, chart_title + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
 
@@ -401,7 +424,7 @@ def main():
         elif "Find node" == chart_name:
             ignore_series = ["Flat cached", "Flat cold"]
             
-            chart_title = "Solmun etsiminen arvon perusteella"
+            chart_title = "Solmun etsiminen arvoja vertailemalla"
             
             make_chart(screen, chart_title, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             
@@ -412,7 +435,7 @@ def main():
         elif "Transform" in chart_name:
             ignore_series = ["Flat cached", "Flat cold"]
 
-            chart_title = "Solmujen arvojen summaus rekursiivisesti"
+            chart_title = "Solmujen arvojen kertominen rekursiivisesti"
             
             make_chart(screen, chart_title, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
 
@@ -422,7 +445,7 @@ def main():
         elif "Find max depth" in chart_name:
             ignore_series = ["Flat cached", "Flat cold"]
             
-            chart_title = "Suurimman syvyyden laskeminen"
+            chart_title = "Puun syvyyden laskeminen"
             
             make_chart(screen, chart_title + "", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
 
@@ -431,37 +454,37 @@ def main():
             do_normalize = False
             
             ignore_from_max = ["Naive Pointer", "Pooled Pointer", "Naive Multiway", "Pooled Multiway"]
-            make_chart(screen, chart_title + ", kohdennettu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            make_chart(screen, chart_title + ", skaalattu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
         elif "Add" in chart_name:
             
-            chart_title = "Solmun lisääminen"
+            chart_title = "Lehtisolmun lisääminen"
             
             ignore_series = ["Flat cached", "Flat cold"]
             make_chart(screen, chart_title, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
         elif "Erase" in chart_name:
             
-            chart_title = "Solmun poistaminen"
+            chart_title = "Alipuun poistaminen"
             
             ignore_series = ["Flat cached", "Flat cold"]
             make_chart(screen, chart_title, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             ignore_from_max = ["Naive Multiway", "Pooled Multiway"]
-            make_chart(screen, chart_title + ", kohdennettu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            make_chart(screen, chart_title + ", skaalattu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
         elif "Move" in chart_name:
             
-            chart_title = "Solmun siirtäminen"
+            chart_title = "Alipuun siirtäminen"
             
             ignore_series = ["Flat cached", "Flat cold"]
             make_chart(screen, chart_title, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             ignore_from_max = ["Naive Multiway", "Pooled Multiway"]
-            make_chart(screen, chart_title + ", kohdennettu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            make_chart(screen, chart_title + ", skaalattu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
         elif "Leaf travel" in chart_name:
             
-            chart_title = "Matkustus juuresta lehtisolmuun"
+            chart_title = "Siirtyminen juuresta lehteen"
             
             ignore_series = ["Flat cold"]
             make_chart(screen, chart_title, data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
             ignore_from_max = ["Flat"]
-            make_chart(screen, chart_title + ", kohdennettu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
+            make_chart(screen, chart_title + ", skaalattu", data_series_headers, data_series_names, data_series, min_data_series, max_data_series)
         elif "Find count" in chart_name:
             
             chart_title = "Solmujen määrän laskeminen"
